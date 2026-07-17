@@ -1,0 +1,19 @@
+# Ignorar arquivos de controle do Git e do VS Code
+.git/
+.gitignore
+.vscode/
+
+# Ignorar ambientes virtuais locais (a GCP vai instalar as dependências lá na nuvem)
+__pycache__/
+.venv/
+env/
+
+# Ignorar arquivos do Docker (a GCP não precisa ler seu Dockerfile local no deploy de código puro)
+Dockerfile
+.dockerignore
+
+# SEGURANÇA MÁXIMA: Nunca envie suas chaves de serviço Service Account para a nuvem
+# (A GCP já fornece chaves de forma nativa e segura dentro do ambiente deles)
+credenciais/
+*key*.json
+.env
