@@ -1,19 +1,15 @@
-# Ignorar logs e arquivos do sistema
-.DS_Store
-Thumbs.db
-*.log
+# Não levar o ambiente virtual local (o Docker vai criar o dele lá dentro)
+.venv/
+venv/
 
-# Ignorar o próprio Git (a imagem final não precisa do histórico do Git)
-.git
+# Não levar arquivos de cache
+__pycache__/
+*.py[cod]
+
+# Não levar o histórico do Git
+.git/
 .gitignore
 
-# Ignorar pastas de ambientes virtuais (Python) e dependências locais
-__pycache__/
-*.pyc
-.venv/
-env/
-node_modules/
-
-# IMPRESCINDÍVEL: Ignorar chaves e credenciais locais da GCP
-*.json
+# SEGURANÇA - Não levar o seu token local para dentro da imagem pública
 .env
+*.json
