@@ -2,6 +2,9 @@
 .git/
 .gitignore
 
+# Não enviar chaves locais para o ambiente GCP
+_SA/
+
 # Ignorar ambientes locais e caches pesados
 .venv/
 venv/
@@ -12,3 +15,10 @@ __pycache__/
 
 # Ignorar o seu .env local
 .env
+
+# Arquivos de Configuração do Terraform
+.terraform/
+*.tfstate
+*.tfstate.backup
+.terraform.lock.hcl
+

@@ -2,6 +2,9 @@
 .venv/
 venv/
 
+# Service Account Keys
+_SA/
+
 # Arquivos de Cache do Python
 __pycache__/
 *.py[cod]
@@ -11,4 +14,15 @@ __pycache__/
 
 # SEGURANÇA MÁXIMA - Credenciais e Variáveis Locais
 .env
-*.json
+*.json.vscode/
+
+# Arquivos locais e estados do Terraform
+.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfstate.*.backup
+.terraform.lock.hcl
+
+# Ignorar arquivos de variáveis que contêm senhas/tokens
+*.tfvars
+*.tfvars.json
