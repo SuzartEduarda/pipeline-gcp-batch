@@ -5,6 +5,11 @@ venv/
 # Service Account Keys
 _SA/
 
+
+src/credentials.json
+src/token.json
+
+
 # Arquivos de Cache do Python
 __pycache__/
 *.py[cod]

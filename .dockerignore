@@ -5,6 +5,9 @@ venv/
 # Ignorar credenciais locais na build do contêiner
 _SA/
 
+src/credentials.json
+src/token.json
+
 # Não levar arquivos de cache
 __pycache__/
 *.py[cod]

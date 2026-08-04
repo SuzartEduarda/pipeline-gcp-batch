@@ -9,3 +9,9 @@ google-cloud-storage>=2.14.0
 
 # Para carregar o token do arquivo .env de forma segura
 python-dotenv>=1.0.1
+
+# Para autenticação e autorização com a API do Google
+google-api-python-client
+google-auth-httplib2
+google-auth-oauthlib
+google-cloud-storage

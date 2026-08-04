@@ -3,7 +3,7 @@
 
 variable "project_id"{
     type = string
-    default = "pipeline-gcp-batch-dev"
+    default = "projeto-dados-pessoal"
 }
 
 variable "region"{

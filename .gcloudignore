@@ -5,6 +5,9 @@
 # Não enviar chaves locais para o ambiente GCP
 _SA/
 
+src/credentials.json
+src/token.json
+
 # Ignorar ambientes locais e caches pesados
 .venv/
 venv/
