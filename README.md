@@ -28,7 +28,11 @@ Google Cloud Storage (Bronze)
 
 
 
-Para futuros projetos (com limitação de gasto) incluir na arquitetura:
-Cloud Function + Pub/Sub com máquinas virtuais ligadas direto
-Com a finalidade de pausar os serviços caso o projeto chegue a um limite de custo 
-pre estabelecido.
+Para evitar custos inesperados em projetos com limite de faturamento (budget cap), a arquitetura utiliza um mecanismo automático de "Kill Switch" (Botão de Emergência).
+Em vez de depender de alertas manuais por e-mail, o Google Cloud Billing monitora os custos em tempo real. Assim que o valor pré-estabelecido é atingido, um evento assíncrono é disparado para desativar a conta de faturamento (Billing Account) ou pausar os recursos ativos, paralisando imediatamente qualquer nova cobrança.
+
+Google Cloud Billing
+   >> Budget Alert (Atinge o limite de custo definido, ex: R$ 50,00)
+   >> Cloud Pub/Sub (Dispara mensagem no tópico de notificação)
+   >> Cloud Function (Executa o script que desvincula o Billing / desliga os serviços)
+   >> Desligar Recursos (Parada imediata de VMs, Cloud Run e BigQuery / Custo zerado)
