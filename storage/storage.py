@@ -32,7 +32,7 @@ def save_raw_to_bronze(data, bucket_setting: str, category_folder: str = "classr
         return
 
     # Leitura de configurações do ambiente
-    is_local_only = os.getenv("LOCAL_ONLY", "False") == "True"
+    is_local_only = os.getenv("LOCAL_ONLY", "False").lower() == "true"
     gcp_project_id = os.getenv("GCP_PROJECT_ID", None)
 
     #Tratamento do Bucket e Prefixo
@@ -42,7 +42,7 @@ def save_raw_to_bronze(data, bucket_setting: str, category_folder: str = "classr
     year = EXECUTION_DATE.strftime("%Y")
     month = EXECUTION_DATE.strftime("%m")
     day = EXECUTION_DATE.strftime("%d")
-    partition_path = f"year={year}/month={month}/day={day}/{category_folder}"
+    partition_path = os.path.join(category_folder, f"year={year}", f"month={month}", f"day={day}")
 
     # Estruturação dos caminhos de saída
     if is_local_only:
@@ -58,12 +58,13 @@ def save_raw_to_bronze(data, bucket_setting: str, category_folder: str = "classr
         # Prefixo dinâmico com o ambiente
          
         env = os.getenv("ENVIRONMENT", "dev").lower()
-        gcs_full_prefix = f"{env_base_prefix}{env}/bronze/educa_insight_vfs/{partition_path}"
+        gcs_partition_path = partition_path.replace("\\", "/")
+        gcs_full_prefix = f"{env_base_prefix}{env}/bronze/educa_insight_vfs/{gcs_partition_path}"
         logging.info(f"[Salvo em Nuvem] Destino definido em: gs://{bucket_name}/{gcs_full_prefix}/")
 
     # Conversão dos dados e cálculo de paginação
     try:
-        df = pd.DataFrame(data)
+        df = pd.json_normalize(data)
         total_records = len(df)
         total_parts = (total_records + page_size - 1) // page_size
         logging.info(f"Processando {total_records} registros em {total_parts} arquivo(s) Parquet.")

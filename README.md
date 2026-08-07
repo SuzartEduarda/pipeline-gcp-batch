@@ -1,5 +1,6 @@
 # pipeline-gcp-batch
 # Ingestão Multicloud, Mensageria Orientada a Eventos e Transformação Analytics
+# Principal prioridade, criar uma arquitetura com o minimo de gasto ou gasto Zero
 
 Pipeline de engenharia de dados focado em processamento em lote (Batch), 
 infraestrutura declarativa e enriquecimento de dados via LLM:

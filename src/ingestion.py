@@ -1,7 +1,8 @@
-import os.path
-import logging
 import re
-from datetime import datetime
+import os
+import sys
+import logging
+from datetime import datetime, timedelta
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
@@ -15,6 +16,10 @@ SCOPES = [
 
 DATA_MINIMA = datetime(2024, 1, 1)
 
+# Variáveis padrão para controle do comportamento Incremental
+INCREMENTAL = os.getenv("INCREMENTAL", "True").lower() == "true"
+INCREMENTAL_DAYS = int(os.getenv("INCREMENTAL_DAYS", "3"))
+
 # Termos da região do Vale do São Francisco
 KEYWORDS_VALE = ['petrolina', 'sao francisco', 'são francisco', 'vales', 'pe', 'ba']
 INSTITUICOES_LOCAIS = ['univasf', 'facape', 'uneb', 'upe', 'if sertao', 'ifsertao', 'uninassau']
@@ -22,16 +27,39 @@ INSTITUICOES_LOCAIS = ['univasf', 'facape', 'uneb', 'upe', 'if sertao', 'ifserta
 TERMOS_EXCLUSAO_CEARA = ['norte', 'ceará', 'ceara', 'ufca', 'leão sampaio', 'fap']
 
 
+# Calcula e retorna a data limite para corte dos dados considerando .env ou argumentos CLI
+def get_incremental_cutoff_date(is_incremental=None, delta_days=None) -> datetime:
+    inc = is_incremental if is_incremental is not None else INCREMENTAL
+    days = delta_days if delta_days is not None else INCREMENTAL_DAYS
+
+    if not inc:
+        logging.info("[Carga em Backfill] Flag INCREMENTAL=False. Extraindo dados a partir de DATA_MINIMA")
+        return DATA_MINIMA
+
+    calculated_cutoff = datetime.now() - timedelta(days=days)
+    cutoff = max(DATA_MINIMA, calculated_cutoff)
+    logging.info(
+        f"[MODO INCREMENTAL] Flag INCREMENTAL=True. janela de {days} dia(s) -> "
+        f"Data limite de corte: {cutoff.strftime('%Y-%m-%d %H:%M:%S')}"
+    )
+    return cutoff
 
 #Função auxiliar que recebe a string de data ISO da API (ex: "2024-05-20T14:10:00Z")
 # e compara com a variável global DATA_MINIMA_EXTRACAO.
-def is_data_valida(data_iso_str):
+def is_data_valida(data_iso_str, cutoff_date=None):
     if not data_iso_str:
         return False
-    # Converte a string ISO do Google para objeto datetime do Python
-    dt_obj = datetime.fromisoformat(data_iso_str.replace('Z', '+00:00')).replace(tzinfo=None)
-    # Compara se a data do registro é MAIOR ou IGUAL à data mínima global
-    return dt_obj >= DATA_MINIMA
+    if cutoff_date is None:
+        cutoff_date = DATA_MINIMA
+
+    try:
+        # Converte a string ISO do Google para objeto datetime do Python
+        dt_obj = datetime.fromisoformat(data_iso_str.replace('Z', '+00:00')).replace(tzinfo=None)
+        # Compara se a data do registro é MAIOR ou IGUAL à data mínima global
+        return dt_obj >= cutoff_date
+    except Exception as e:
+        logging.warning(f"ERRO ao converter data ISO'{data_iso_str}': {e}")
+        return False
 
 
 # Valida se a turma pertence a uma instituição de ensino da região 
@@ -67,17 +95,20 @@ def is_target_course(course):
 #função responsável por autenticar e gerar o token de acesso
 def authenticate_classroom():
     creds = None
-    if os.path.exists('src/token.json'):
-        creds = Credentials.from_authorized_user_file('src/token.json', SCOPES)
+    token_path = 'src/token.json' if os.path.exists('src/token.json') else 'token.json'
+    credentials_path = 'src/credentials.json' if os.path.exists('src/credentials.json') else 'credentials.json'
+    if os.path.exists(token_path):
+        creds = Credentials.from_authorized_user_file(token_path, SCOPES)
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
-            flow = InstalledAppFlow.from_client_secrets_file(
-                'src/credentials.json', SCOPES
-                )
+            if not os.path.exists(credentials_path):
+                logging.error(f"ERRO CRITICO: Arquivo de credenciais'{credentials_path}' não encontrado")
+                sys.exit(1)
+            flow = InstalledAppFlow.from_client_secrets_file(credentials_path, SCOPES)
             creds = flow.run_local_server(port=0)
-        with open('src/token.json', 'w') as token:
+        with open(token_path, 'w') as token:
             token.write(creds.to_json())
     return build('classroom', "v1", credentials=creds)
 
@@ -122,7 +153,7 @@ def list_course_work(service, course_id):
 # para buscar os comentários das tarefas, aplicando a resposta parcial (fields) e a 
 # paginação com pageSize e pageToken.
 
-def extract_course_comments(service, course_id, post_id):
+def extract_course_comments(service, course_id, post_id, cutoff_date=None):
     comments = []
     page_token = None
     fields_query = 'nextPageToken,comments(id,content,creationTime,author(emailAddress,name/fullName))'
@@ -134,16 +165,55 @@ def extract_course_comments(service, course_id, post_id):
             pageToken=page_token,
             fields=fields_query
         ).execute()
-        comments.extend(response.get('comments', []))
+        raw_comments = response.get('comments', [])
+        for comment in raw_comments:
+            if is_data_valida(comment.get('creationTime'), cutoff_date):
+                comment['courseId'] = course_id
+                comment['courseWorkId'] = post_id
+                comments.append(comment)
+        
         page_token = response.get('nextPageToken')
         if not page_token:
             break
     logging.info(f"Total de {len(comments)} comentarios extraidos com sucesso da tarefa {post_id}.")    
     return comments
 
+#Extrai todos os dados do Google Classroom e os retorna para o orquestrador main.py
+def extract_classroom_data(is_incremental=None, delta_days=None):
+    cutoff_date = get_incremental_cutoff_date(is_incremental, delta_days)
+
+    service = authenticate_classroom()
+    logging.info("Servico do google classroom, autenticado com Sucesso.")
+
+    courses = list_courses(service)
+    if not courses:
+        logging.warning("Nenhuma turma ativa encontrada pelos filtros")
+        return [], False
+
+    all_extract_comments = []
+    has_errors = False
+
+    for course in courses:
+        course_id = course.get('id')
+        course_name = course.get('name')
+        logging.info(f"Processando turma: {course_name} (ID: {course_id})")
+        
+        try:
+            coursework_list = list_course_work(service, course_id)
+            for work in coursework_list:
+                work_id = work.get('id')
+                comments = extract_course_comments(service, course_id, work_id, cutoff_date)
+                all_extract_comments.extend(comments)
+        except Exception as e:
+            logging.error(f"ERRO ao processar a turma {course_name} (ID: {course_id}): {str(e)}")
+            has_errors = True
+            continue
+    return all_extract_comments, has_errors
+
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-    service = authenticate_classroom()
-    logging.info("Servico do google classroom authenticado com sucesso")
+    logging.info("Executando modulo de extração  em modo de TESTE LOCAL")
+    data, error = extract_classroom_data()
+    logging.info(f"Teste concluido. {len(data)} comentarios extraidos. Houve error: {error}")
 
 
