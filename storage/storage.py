@@ -26,7 +26,7 @@ def _parse_bucket_and_prefix(raw_bucket_setting: str):
         return bucket_name, base_prefix
     return raw_bucket_setting, ""
 
-def save_raw_to_bronze(data, bucket_setting: str, category_folder: str = "classroom_feedbacks", page_size: int = 5000) -> None:
+def save_raw_to_bronze(data, bucket_setting: str, category_folder: str = "reclame_aqui_data", page_size: int = 5000) -> None:
     if not data:
         logging.warning("Nenhum dado fornecido para salvar no Storage.")
         return
@@ -44,9 +44,10 @@ def save_raw_to_bronze(data, bucket_setting: str, category_folder: str = "classr
     day = EXECUTION_DATE.strftime("%d")
     partition_path = os.path.join(category_folder, f"year={year}", f"month={month}", f"day={day}")
 
+    DOMAIN_NAME = "consumer_insights_vfs"
     # Estruturação dos caminhos de saída
     if is_local_only:
-        output_dir = os.path.join("data", "bronze", "educa_insight_vfs", partition_path)
+        output_dir = os.path.join("data", "bronze", DOMAIN_NAME, partition_path)
         logging.info(f" [Salvo Localmente] Destino definido em: {output_dir}")
         try:
             os.makedirs(output_dir, exist_ok=True)
@@ -59,7 +60,7 @@ def save_raw_to_bronze(data, bucket_setting: str, category_folder: str = "classr
          
         env = os.getenv("ENVIRONMENT", "dev").lower()
         gcs_partition_path = partition_path.replace("\\", "/")
-        gcs_full_prefix = f"{env_base_prefix}{env}/bronze/educa_insight_vfs/{gcs_partition_path}"
+        gcs_full_prefix = f"{env_base_prefix}{env}/bronze/{DOMAIN_NAME}/{gcs_partition_path}"
         logging.info(f"[Salvo em Nuvem] Destino definido em: gs://{bucket_name}/{gcs_full_prefix}/")
 
     # Conversão dos dados e cálculo de paginação
@@ -77,7 +78,7 @@ def save_raw_to_bronze(data, bucket_setting: str, category_folder: str = "classr
     bucket = None
     if not is_local_only:
         if not bucket_name:
-            logging.error("Nome do Bucket (GCS_BUCKET_NAME) não configurado.")
+            logging.error("Nome do Bucket (GCP_BRONZE_BUCKET / GCS_BUCKET_NAME) não configurado.")
             sys.exit(1)
         try:
             client = storage.Client(project=gcp_project_id) if gcp_project_id else storage.Client()
