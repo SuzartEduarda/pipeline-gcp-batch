@@ -8,7 +8,7 @@ token.json
 credentials.json
 src/credentials.json
 src/token.json
-
+token.json
 # ignorar arquivos de teste local
 data/*
 data/
