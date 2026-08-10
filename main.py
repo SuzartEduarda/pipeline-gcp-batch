@@ -4,23 +4,23 @@ import logging
 import argparse
 from dotenv import load_dotenv
 
-from src.extract_consumidor import extract_consumidor_gov_data as extract_reclame_aqui_data
+from src.create_data import extract_reclame_aqui_data
 from storage.storage import save_raw_to_bronze
 
 load_dotenv()
 
-
-def setup_logging():
+# Configurar logs de execução
+def configurar_logs() -> None:
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s - [%(levelname)s] - %(message)s',
         handlers=[logging.StreamHandler(sys.stdout)]
     )
 
-
-def parse_arguments():
+# Função para ler parametros via linha ded comando
+def obter_argumentos():
     parser = argparse.ArgumentParser(
-        description="Pipeline Lakehouse: Ingestão de Dados Abertos Reais -> Camada Bronze (GCS/LOCAL)"
+        description="Pipeline Lakehouse: Geração de Dados Abertos Reais -> Camada Bronze (GCS/LOCAL)"
     )
 
     group = parser.add_mutually_exclusive_group()
@@ -41,7 +41,7 @@ def parse_arguments():
         "--days",
         type=int,
         default=None,
-        help="Quantidade de dias para janela de extração incremental"
+        help="Quantidade de dias para janela de Geração incremental"
     )
     parser.add_argument(
         "--bucket",
@@ -51,14 +51,13 @@ def parse_arguments():
     )
     return parser.parse_args()
 
+# Função principal para orquestra a geração e salvamento dos dados
+def executar_pipeline() -> None:
+    configurar_logs()
+    args = obter_argumentos()
+    logging.info("INICIANDO pipeline: DADOS GERADOS (via Faker) -> CAMADA BRONZE")
 
-def run_pipeline():
-    setup_logging()
-    args = parse_arguments()
-    logging.info("==========================================================================")
-    logging.info("INICIANDO EXTRAÇÃO: DADOS ABERTOS REAIS (Consumidor.gov) -> CAMADA BRONZE")
-    logging.info("==========================================================================")
-
+    #Resolução parametros de carga
     is_incremental = None
     if args.backfill:
         is_incremental = False
@@ -66,35 +65,36 @@ def run_pipeline():
         is_incremental = True
     delta_days = args.days
 
+    # Resolução de Variavel do Bucket
     bucket_setting = args.bucket or os.getenv("GCP_BRONZE_BUCKET") or os.getenv("GCS_BUCKET_NAME") or ""
     is_local = os.getenv("LOCAL_ONLY", "False").lower() == "true"
 
     if not is_local and not bucket_setting:
-        logging.error("ERRO CRÍTICO: Nome do Bucket não definido via CLI (--bucket) ou .env (GCP_BRONZE_BUCKET)")
+        logging.error("ERRO CRÍTICO: Nome do Bucket não definido")
         sys.exit(1)
 
-    # ETAPA 1: Obtém apenas dados reais
+    # ETAPA 1: Geração de dados
     try:
-        logging.info("[ETAPA: 1/2] Lendo dados reais oficiais e aplicando mascaramento LGPD...")
-        extracted_complaints, has_errors = extract_reclame_aqui_data(
+        logging.info("[ETAPA: 1/2] Gerando dados via Faker")
+        reclamacoes_extraidas, has_errors = extract_reclame_aqui_data(
             is_incremental=is_incremental,
             delta_days=delta_days
         )
         
-        if not extracted_complaints:
-            logging.error("ABORTANDO: Nenhum dado real foi capturado. Verifique o arquivo 'data_local/consumidor_gov.csv'.")
-            sys.exit(1)
+        if not reclamacoes_extraidas:
+            logging.warning("Nenhuma reclamação gerada. finalizar sem salvar")
+            sys.exit(0)
             
-        logging.info(f"Extração concluída. Total de {len(extracted_complaints)} reclamações REAIS preparadas.")
+        logging.info(f"Geração concluída. Total de {len(reclamacoes_extraidas)} reclamações preparadas.")
     except Exception as e:
-        logging.error(f"ERRO CRÍTICO na etapa de extração: {str(e)}")
+        logging.error(f"ERRO CRÍTICO na etapa de Geração de dados: {str(e)}")
         sys.exit(1)
 
-    # ETAPA 2: Grava os dados reais em Parquet de 100 em 100 itens
+    # ETAPA 2: Grava os dados em Parquet de 100 em 100 itens
     try:
-        logging.info("[ETAPA: 2/2] Persistindo dados reais na Camada Bronze Parquet (Lotes de 100)")
+        logging.info("[ETAPA: 2/2] Persistindo reclamações na Camada Bronze Parquet (em Lotes)")
         save_raw_to_bronze(
-            data=extracted_complaints,
+            data=reclamacoes_extraidas,
             bucket_setting=bucket_setting,
             category_folder="reclame_aqui_data",
             page_size=100
@@ -104,11 +104,11 @@ def run_pipeline():
         sys.exit(1)
 
     if has_errors:
-        logging.warning("Pipeline concluído com alertas.")
+        logging.warning("Pipeline concluído com alertas durante geração de dados.")
     else:
-        logging.info("EXECUTADO COM SUCESSO ABSOLUTO (APENAS DADOS REAIS)")
+        logging.info("EXECUTADO COM SUCESSO ABSOLUTO")
     sys.exit(0)
 
 
 if __name__ == '__main__':
-    run_pipeline()
+    executar_pipeline()

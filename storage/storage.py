@@ -7,16 +7,14 @@ from datetime import datetime
 from google.cloud import storage
 from google.api_core.exceptions import GoogleAPIError
 
-# trava de execução timestamp 
-# fixado no momento do início da execução
-EXECUTION_TIMESTAMP = datetime.now().strftime("%Y%m%d_%H%M%S")
+# trava de execução timestamp e data fixada no momento do início da execução
 EXECUTION_DATE = datetime.now()
+EXECUTION_TIMESTAMP = EXECUTION_DATE.strftime("%Y%m%d_%H%M%S")
+EXECUTION_DATE_FOLDER = EXECUTION_DATE.strftime("%Y%m%d")
 
    
-# Trata casos onde o nome do bucket inclui caminhos/prefixos no .env
-# meu-bucket-bronze/subpasta' -> ('meu-bucket-bronze', 'subpasta/')
-
-def _parse_bucket_and_prefix(raw_bucket_setting: str):
+# Função para extrair nome do bucket e o prefixo do caminho do .env
+def extrair_bucket_prefixo(raw_bucket_setting: str):
     if not raw_bucket_setting:
         return "", ""
     if "/" in raw_bucket_setting:
@@ -26,7 +24,8 @@ def _parse_bucket_and_prefix(raw_bucket_setting: str):
         return bucket_name, base_prefix
     return raw_bucket_setting, ""
 
-def save_raw_to_bronze(data, bucket_setting: str, category_folder: str = "reclame_aqui_data", page_size: int = 5000) -> None:
+# Converter e salvar dados na camada Bronze em arquivos Parquet
+def salvar_dados_bronze(data, bucket_setting: str, category_folder: str = "reclame_aqui_data", page_size: int = 100) -> None:
     if not data:
         logging.warning("Nenhum dado fornecido para salvar no Storage.")
         return
@@ -36,28 +35,26 @@ def save_raw_to_bronze(data, bucket_setting: str, category_folder: str = "reclam
     gcp_project_id = os.getenv("GCP_PROJECT_ID", None)
 
     #Tratamento do Bucket e Prefixo
-    bucket_name, env_base_prefix = _parse_bucket_and_prefix(bucket_setting)
+    bucket_name, env_base_prefix = extrair_bucket_prefixo(bucket_setting)
 
-    # Partição (year=YYYY/month=MM/day=DD)
+    # Partição temporal (year=YYYY/month=MM/day=DD)
     year = EXECUTION_DATE.strftime("%Y")
     month = EXECUTION_DATE.strftime("%m")
     day = EXECUTION_DATE.strftime("%d")
     partition_path = os.path.join(category_folder, f"year={year}", f"month={month}", f"day={day}")
 
     DOMAIN_NAME = "consumer_insights_vfs"
-    # Estruturação dos caminhos de saída
+
+    # Estruturação dos caminhos de saída (local/GCP)
     if is_local_only:
-        output_dir = os.path.join("data", "bronze", DOMAIN_NAME, partition_path)
-        logging.info(f" [Salvo Localmente] Destino definido em: {output_dir}")
+        output_dir = os.path.join("data", EXECUTION_DATE_FOLDER)
+        logging.info(f"[Salvo Localmente] Destino definido em: {output_dir}")
         try:
             os.makedirs(output_dir, exist_ok=True)
         except Exception as e:
             logging.error(f"Falha Critica para criar diretorio local '{output_dir}': {str(e)}")
             sys.exit(1)
     else:
-        # Leitura da variável de ambiente (padrão 'dev')
-        # Prefixo dinâmico com o ambiente
-         
         env = os.getenv("ENVIRONMENT", "dev").lower()
         gcs_partition_path = partition_path.replace("\\", "/")
         gcs_full_prefix = f"{env_base_prefix}{env}/bronze/{DOMAIN_NAME}/{gcs_partition_path}"
@@ -87,19 +84,18 @@ def save_raw_to_bronze(data, bucket_setting: str, category_folder: str = "reclam
             logging.error(f"ERRO ao conectar com GCS - Google Cloud Storage: {str(e)}")
             sys.exit(1)
 
-    # Gravação e envio dos lotes em Parquet
+    # Gravação e envio dos lotes em Parquet paginado
     for i in range(total_parts):
         part_number = i + 1
         start_idx = i * page_size
         end_idx = start_idx + page_size
         df_chunk = df.iloc[start_idx:end_idx]
 
-        filename = f"extraction_{EXECUTION_TIMESTAMP}_part_{part_number:05d}.parquet"
+        filename = f"{EXECUTION_TIMESTAMP}_part_{part_number:05d}.parquet"
         
-        # Rota de destino final
-        #ROTA LOCAL: Gravação física no disco na pasta data/
+        # Rota de destino final Local/Nuvem
         if is_local_only:
-            local_filepath =os.path.join(output_dir, filename)
+            local_filepath = os.path.join(output_dir, filename)
             try:
                 df_chunk.to_parquet(local_filepath, index=False, engine='pyarrow')
                 logging.info(f"[Salvamento de arquivos locais] arquivo salvo em: {local_filepath}")
@@ -125,3 +121,6 @@ def save_raw_to_bronze(data, bucket_setting: str, category_folder: str = "reclam
                 logging.error(f"ERRO ao gerar/enviar Parquet em memoria: {str(e)}")
                 sys.exit(1)
     logging.info("Processo Concluido com Sucesso Absoluto")
+
+# Compatibilidade com chamado main.py
+save_raw_to_bronze = salvar_dados_bronze
