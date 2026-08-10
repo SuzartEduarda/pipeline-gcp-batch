@@ -4,9 +4,14 @@
 
 # Não enviar chaves locais para o ambiente GCP
 _SA/
-
+token.json
+credentials.json
 src/credentials.json
 src/token.json
+
+# ignorar arquivos de teste local
+data/*
+data/
 
 # Ignorar ambientes locais e caches pesados
 .venv/

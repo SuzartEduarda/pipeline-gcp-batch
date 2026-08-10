@@ -4,7 +4,14 @@ venv/
 
 # Service Account Keys
 _SA/
+token.json
+credentials.json
+src/credentials.json
+src/token.json
 
+# ignorar arquivos de teste local
+data/*
+data/
 
 src/credentials.json
 src/token.json
