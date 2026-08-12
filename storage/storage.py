@@ -37,14 +37,7 @@ def salvar_dados_bronze(data, bucket_setting: str, category_folder: str = "recla
     #Tratamento do Bucket e Prefixo
     bucket_name, env_base_prefix = extrair_bucket_prefixo(bucket_setting)
 
-    # Partição temporal (year=YYYY/month=MM/day=DD)
-    year = EXECUTION_DATE.strftime("%Y")
-    month = EXECUTION_DATE.strftime("%m")
-    day = EXECUTION_DATE.strftime("%d")
-    partition_path = os.path.join(category_folder, f"year={year}", f"month={month}", f"day={day}")
-
-    DOMAIN_NAME = "consumer_insights_vfs"
-
+    # Pasta única com a data da execução
     # Estruturação dos caminhos de saída (local/GCP)
     if is_local_only:
         output_dir = os.path.join("data", EXECUTION_DATE_FOLDER)
@@ -55,9 +48,7 @@ def salvar_dados_bronze(data, bucket_setting: str, category_folder: str = "recla
             logging.error(f"Falha Critica para criar diretorio local '{output_dir}': {str(e)}")
             sys.exit(1)
     else:
-        env = os.getenv("ENVIRONMENT", "dev").lower()
-        gcs_partition_path = partition_path.replace("\\", "/")
-        gcs_full_prefix = f"{env_base_prefix}{env}/bronze/{DOMAIN_NAME}/{gcs_partition_path}"
+        gcs_full_prefix = f"{env_base_prefix}{EXECUTION_DATE_FOLDER}"
         logging.info(f"[Salvo em Nuvem] Destino definido em: gs://{bucket_name}/{gcs_full_prefix}/")
 
     # Conversão dos dados e cálculo de paginação
