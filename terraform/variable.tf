@@ -1,5 +1,4 @@
-#
-#
+# Variaveis dinamicas - Seguindo boas praticas
 
 variable "project_id" {
   type    = string

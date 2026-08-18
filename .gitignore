@@ -6,6 +6,7 @@ venv/
 .gcloudignore
 # Service Account Keys
 _SA/
+*.json
 token.json
 credentials.json
 gcp-credentials.json

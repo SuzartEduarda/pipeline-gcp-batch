@@ -33,7 +33,7 @@ resource "google_storage_bucket" "bronze_bucket" {
     managed_by  = "terraform"
   }
 }
-
+ 
 # O bloco a baixo vai declarar os datasets
 # Camada  silver
 resource "google_bigquery_dataset" "silver_dataset" {

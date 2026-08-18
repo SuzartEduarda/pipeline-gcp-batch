@@ -119,7 +119,6 @@ def criar_dados(total_registros: int = 1000, data_inicio_janela: Optional[dateti
         status_com_ruido = random.choice(status)
 
         # Sorteio preciso para filtro
-        
         segundos_aleatorios = random.randint(0, intervalo_segundos)
         dt_postagem = inicio_sorteio + timedelta(seconds=segundos_aleatorios)
 
