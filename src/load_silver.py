@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 # função principal e tratamento de credenciais
 
-def carregar_bronze_para_silver() -> None:
+def carregar_bronze_para_silver(is_incremental: bool = True) -> None:
     logger.info("INICIANDO PROCESSO DE CARGA: Camada Bronze(GCS) -> Camada Silver(BigQuery)")
     
     # Pegando variaveis do .env
@@ -35,6 +35,14 @@ def carregar_bronze_para_silver() -> None:
     logger.info(f"Origem dos dados no GCS: {gcs_source_uri}")
     logger.info(f"Tabela de destino no BQ: {table_ref}")
     
+    # Modos de gravação no BQ write_append ou writr_truncate
+    write_mode = (
+        bigquery.WriteDisposition.WRITE_APPEND
+        if is_incremental
+        else bigquery.WriteDisposition.WRITE_TRUNCATE
+    )
+    logging.info(f"Modo de gravação no BigQuery: {write_mode}")
+    
     # Orquestra a comunicação entre os serviços de nuvem
     # inicializa o cliente Bigquery
     try:
@@ -46,7 +54,7 @@ def carregar_bronze_para_silver() -> None:
     # Parâmetros  da Ingestão
     job_config = bigquery.LoadJobConfig(
         source_format=bigquery.SourceFormat.PARQUET,
-        write_disposition=bigquery.WriteDisposition.WRITE_APPEND,
+        write_disposition=write_mode,
         autodetect=True
     )
     

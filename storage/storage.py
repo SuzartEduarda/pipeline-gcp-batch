@@ -25,7 +25,7 @@ def extrair_bucket_prefixo(raw_bucket_setting: str):
     return raw_bucket_setting, ""
 
 # Converter e salvar dados na camada Bronze em arquivos Parquet
-def salvar_dados_bronze(data, bucket_setting: str, category_folder: str = "reclame_aqui_data", page_size: int = 100) -> None:
+def salvar_dados_bronze(data, bucket_setting: str, category_folder: str = "reclame_aqui_data", page_size: int = 100, is_incremental: bool = True) -> None:
     if not data:
         logging.warning("Nenhum dado fornecido para salvar no Storage.")
         return
@@ -74,6 +74,21 @@ def salvar_dados_bronze(data, bucket_setting: str, category_folder: str = "recla
         except Exception as e:
             logging.error(f"ERRO ao conectar com GCS - Google Cloud Storage: {str(e)}")
             sys.exit(1)
+            
+            # Backfill no GCP / Truncate
+        if not is_incremental:
+            try:
+                logging.info("[BACKFILL / TRUNCATE EM NUVEM] Limpeza de dados existentes no Bucket")
+                blobs = bucket.list_blobs()
+                count_deleted = 0
+                for blob in blobs:
+                    if blob.name.endswith(".parquet"):
+                        blob.delete()
+                        count_deleted += 1
+                logging.info(f"[Backfill / TRUNCATE NUVEM ]: Sucesso: {count_deleted} arquivo(s) antigo(s) apagado(s)  do GCS")
+            except Exception as e:
+                logging.error(f"ERRO ao conectar ou limpar o GCS - Google Cloud Storage: {str(e)}")
+                sys.exit(1)
 
     # Gravação e envio dos lotes em Parquet paginado
     for i in range(total_parts):

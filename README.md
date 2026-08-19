@@ -50,23 +50,4 @@ Google Cloud Billing
 
 ## 4. Estrutura de Diretórios do Repositório
 
-PIPELINE-GCP-BATCH-INGESTAO/
-│
-├── .github/workflows/
-│   └── github-pipelines.yml   <-- Centraliza o Cron Job e a execução do contêiner
-│
-├── src/                        <-- Módulos de desenvolvimento Python
-│   └── create_data.py         <-- Gerador sintético de reclamações com Faker (VSF)
-│
-├── storage/
-│   └── storage.py             <-- Gravação paginada em Parquet (lotes de 100 registros)
-│
-├── terraform/                  <-- Infraestrutura como Código (IaC)
-│   ├── main.tf                <-- Declaração de Buckets, Pub/Sub e BigQuery
-│   ├── providers.tf           <-- Provedor Google Cloud
-│   └── variables.tf           <-- Variáveis globais
-│
-├── Dockerfile                 <-- Ambiente containerizado
-├── main.py                    <-- Orquestrador principal da execução (Ingestão/Bronze)
-├── README.md                  <-- Documentação arquitetural
-└── requirements.txt           <-- Dependências (pandas, pyarrow, faker, python-dotenv, etc.)
+PIPELINE-GCP-BATCH-INGESTAO

@@ -4,7 +4,10 @@ import shutil
 import logging
 from datetime import datetime, timedelta
 from typing import List, Dict, Tuple, Optional
+from dotenv import load_dotenv
 from faker import Faker
+
+load_dotenv()
 
 # Biblioteca faker
 fake = Faker('pt_BR')
@@ -162,22 +165,25 @@ def executar_truncamento_local() -> None:
 
 #Função orquestradora principal para gerar e filtrar as reclamações
 def dados_reclamacao(is_incremental: Optional[bool] = None, delta_days: Optional[int] = None) -> Tuple[List[Dict], bool]:
-    inc = is_incremental if is_incremental is not None else INCREMENTAL
+    inc = is_incremental if is_incremental is not None else (os.getenv("INCREMENTAL", "True").lower() == "true")
     corte_dedata = obter_corte_data(is_incremental, delta_days)
+
+    # leitura dinamica de variaveis
+    volumetria_backfill = int(os.getenv("VOLUMETRIA_BACKFILL", "2500"))
+    volumetria_incremental = int(os.getenv("VOLUMETRIA_INCREMENTAL", "1000"))
 
     #Se for backfill (inc == False), executa o Truncate(Reset)
     if not inc:
         executar_truncamento_local()
-        volumetria = VOLUMETRIA_BACKFILL
+        volumetria = volumetria_backfill
     else:
-        volumetria = VOLUMETRIA_INCREMENTAL
+        volumetria = volumetria_incremental
 
     simular_conexao()
 
     #Gerar registros já alinhados com a janela temporal definida
     reclamacoes_geradas = criar_dados(
         total_registros=volumetria,
-
         data_inicio_janela=corte_dedata
     )
 
