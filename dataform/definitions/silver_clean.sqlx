@@ -1,0 +1,83 @@
+config {
+    type: "table",
+    schema: "silver_" + dataform.projectConfig.vars.environment,
+    name: "tb_reclame_aqui_clean",
+    description: "Camadaa Silver: Dados Higienizados, deduplicados, anonimizados e validados",
+    
+    // Assertions garantes a qualidade dos dados
+    assertions: {
+        uniqueKey: ["id_reclamacao"],
+        nonNull: ["id_reclamacao", "data_postagem", "empresa_alvo", "categoria_servico"]
+    }
+}
+
+SELECT
+    id_reclamacao, canal_origem, empresa_alvo, categoria_servico, titulo,
+
+    -- Anonimação de dados email, telefone e cpf
+    REGEXP_REPLACE(
+        REGEXP_REPLACE(
+            REGEXP_REPLACE(
+                descricao_texto,
+                r'\b\d{3}\.\d{3}\.\d{3}-\d{2}\b', '[CPF MASCARADO]'
+            ),
+            r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', '[EMAIL MASCARADO]'
+        ),
+        r'\(?\d{2}\)?\s?\d{4,5}-\d{4}', '[TELEFONE MASCARADO]'
+    ) AS descricao_texto,
+
+    replica_empresa_texto,
+
+    -- Padronização de dados trim tira espaço vazio, upper deixa o texto maiusculo
+    -- INITCAP deixza a primeira letra das palavras em maiusculo e o resto minusculo
+    INITCAP(TRIM(cidade)) AS cidade,
+    UPPER(TRIM(uf)) as uf,
+
+    -- Conversão de tipo de dado safe_cast
+    SAFE_CAST( data_postagem AS TIMESTAMP) AS data_postagem,
+    UPPER(TRIM(status_resolucao)) AS status_resolucao,
+
+    -- dados que não precisam ser tratados nessa etapa
+    nota_consumidor, tempo_resposta_dias, houve_reconsideracao, score_prioridade_simulado,
+    tentativas_contato_previas,
+
+    -- metadado para auditoria de rastreabilidade de linhagem
+    CURRENT_TIMESTAMP() AS data_processamento_silver
+
+FROM
+    ${ref("tb_reclame_aqui_raw")}
+
+WHERE
+    -- descartando dados inuteis
+    id_reclamacao IS NOT NULL
+    AND data_postagem IS NOT NULL
+
+    --descartando dados inconsistentes
+    AND NOT(
+        (
+            categoria_servico IN ('Energia Elétrica', 'Saneamento / Água')
+            AND (
+                LOWER(descricao_texto) LIKE '%pedido comprado online%'
+                or LOWER(descricao_texto) LIKE '%atraso no prazo de entrega%'
+            )
+        )
+        OR
+        (
+            categoria_servico IN ('Varejo / E-commerce', 'Varejo / Shopping')
+            AND(
+                LOWER(descricao_texto) LIKE '%esgoto a ceu aberto%'
+                OR LOWER(descricao_texto) LIKE '%torneiras secas%'
+                OR LOWER(descricao_texto) Like '%abastecimento de água%'
+            )
+        )
+        OR
+        (
+            categoria_servico = 'Banda Larga / Internet'
+            AND(
+                LOWER(descricao_texto) LIKE '%oscilação constante de energia%'
+                OR LOWER(descricao_texto) LIKE '%vazamento na via pública%'
+            )
+        )
+    
+    )
+        

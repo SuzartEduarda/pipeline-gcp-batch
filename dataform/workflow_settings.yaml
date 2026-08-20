@@ -1,0 +1,8 @@
+# Configurações globais do dataform
+
+defaultProject: "projeto-dados-pessoal"
+defaultLocation: "us-central1"
+defaultDataset: "silver_dev"
+dataformCoreVersion: "3.0.0"
+vars:
+  environment: "dev"
