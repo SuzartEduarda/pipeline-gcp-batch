@@ -1,0 +1,37 @@
+config {
+    type: "table",
+    schema: "gold_" + dataform.projectConfig.vars.environment,
+    name: "tb_kpi_desempenho_categorias",
+    description: "Camada Gold: Métricas agregadas de desempenho, volume, SLA por empresa e categoria ded serviço",
+
+    // Assertions: garantia de unicidade de dados na chave da agregação
+    assertions: {
+        uniqueKey: ["postagem_data_mes", "empresa_alvo", "categoria_servico"]
+    }
+}
+
+SELECT
+    --chave de agrupamento tempo e negocio
+    FORMAT_TIMESTAMP('%Y-%m', data_postagem) AS postagem_data_mes,
+    empresa_alvo,
+    categoria_servico,
+
+    -- Volume total de ocorrencias
+    COUNT(id_reclamacao) AS total_reclamacao,
+    
+    -- Metricas de performace e SLA (Com conversão de string para float)
+    ROUND(AVG(SAFE_CAST(tempo_resposta_dias AS FLOAT64)), 2) AS tempo_medio_resposta_dias,
+    ROUND(AVG(SAFE_CAST(score_prioridade_simulado AS FLOAT64)), 2) AS score_prioridade_medio,
+    ROUND(AVG(SAFE_CAST(nota_consumidor AS FLOAT64)), 2) AS nota_media_consumidor,
+
+    --Volume de casos com reconsideração
+    COUNTIF(houve_reconsideracao = TRUE) AS total_reconsideracoes,
+
+    -- Metadado de rastreabilidade e Auditoria
+    CURRENT_TIMESTAMP() AS data_processamento_gold
+
+FROM
+    ${ref("tb_reclame_aqui_clean")}
+
+GROUP BY
+    1, 2, 3
