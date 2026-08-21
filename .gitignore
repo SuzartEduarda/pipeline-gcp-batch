@@ -32,7 +32,8 @@ __pycache__/
 # SEGURANÇA MÁXIMA - Credenciais e Variáveis Locais
 .env
 *.json.vscode/
-
+*.df-credentials.json
+dataform/.df-credentials.json
 # Arquivos locais e estados do Terraform
 .terraform/
 *.tfstate

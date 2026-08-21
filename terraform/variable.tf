@@ -19,5 +19,5 @@ variable "environment" {
 variable "location" {
   description = "Localização geografica para buckets e datasets"
   type        = string
-  default     = "US"
+  default     = "us-central1"
 }
