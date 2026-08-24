@@ -58,12 +58,18 @@ def executar_pipeline() -> None:
     args = obter_argumentos()
     logging.info("INICIANDO pipeline: DADOS GERADOS (via Faker) -> CAMADA BRONZE -> CAMADA SILVER")
 
-    #Resolução parametros de carga
+    #Resolução parametros de carga Padrão: Incremental
     is_incremental = None
     if args.backfill:
         is_incremental = False
-    elif args.incremental:
+        logging.info("Modo de carga: Backfill")
+    elif args.incremental: 
         is_incremental = True
+        logging.info("Modo de carga: Incremental, Padrão")
+    else:
+        env_incremental = os.getenv("INCREMENTAL", "True").lower() == "true"
+        is_incremental = env_incremental
+        logging.info(f"Modo de carga: Padrão: {is_incremental}")
     delta_days = args.days
 
     # Resolução de Variavel do Bucket

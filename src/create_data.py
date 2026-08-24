@@ -165,8 +165,11 @@ def executar_truncamento_local() -> None:
 
 #Função orquestradora principal para gerar e filtrar as reclamações
 def dados_reclamacao(is_incremental: Optional[bool] = None, delta_days: Optional[int] = None) -> Tuple[List[Dict], bool]:
-    inc = is_incremental if is_incremental is not None else (os.getenv("INCREMENTAL", "True").lower() == "true")
-    corte_dedata = obter_corte_data(is_incremental, delta_days)
+    if is_incremental is not None:
+        inc = is_incremental
+    else:
+        inc = os.getenv("INCREMENTAL", "True").lower() == "true"
+    corte_dedata = obter_corte_data(is_incremental=inc, delta_days=delta_days)
 
     # leitura dinamica de variaveis
     volumetria_backfill = int(os.getenv("VOLUMETRIA_BACKFILL", "2500"))
