@@ -1,0 +1,11 @@
+config {
+    type: "operations",
+    schema: "silver_" + dataform.projectConfig.vars.environment,
+    name: "gemini_model",
+    hasOutput: true,
+    tags: ["infra_llm"]
+}
+
+CREATE OR REPLACE MODEL ${self()}
+REMOTE WITH CONNECTION `projects/projeto-dados-pessoal/locations/us-central1/connections/gemini_vertex_connection`
+OPTIONS (ENDPOINT = 'gemini-2.5-flash');
