@@ -18,7 +18,7 @@ def configurar_logs() -> None:
         handlers=[logging.StreamHandler(sys.stdout)]
     )
 
-# Função para ler parametros via linha ded comando
+# Função para ler parametros via linha de comando
 def obter_argumentos():
     parser = argparse.ArgumentParser(
         description="Pipeline Lakehouse: Geração de Dados Abertos Reais -> Camada Bronze (GCS/LOCAL)"

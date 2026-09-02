@@ -73,3 +73,20 @@ resource "google_pubsub_topic" "kill_switch_topic" {
     managed_by  = "terraform"
   }
 }
+
+# Conexão externa do Bigquery para comunicação com o Vertex AI
+resource "google_bigquery_connection" "gemini_conection"{
+  connection_id = "gemini_vertex_connection"
+  project       = var.project_id
+  location      = var.location
+  description   = "Conexão remota BQ para invocar o modelo Gemini na Vertex AI"
+
+  cloud_resource {}
+}
+
+# Permissão IAM: Concede a Service account a role de vertex ai user
+resource "google_project_iam_member" "bq_connection_vertex_user"{
+  project = var.project_id
+  role    = "roles/aiplatform.user"
+  member  = "serviceAccount:${google_bigquery_connection.gemini_conection.cloud_resource[0].service_account_id}"
+}
