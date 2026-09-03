@@ -8,11 +8,16 @@ config {
     assertions: {
         uniqueKey: ["id_reclamacao"],
         nonNull: ["id_reclamacao", "data_postagem", "empresa_alvo", "categoria_servico"]
-    }
+    },
+    tags: ["silver"]
 }
 
 SELECT
-    id_reclamacao, canal_origem, empresa_alvo, categoria_servico, titulo,
+    id_reclamacao, 
+    UPPER(TRIM(canal_origem)) AS canal_origem, 
+    TRIM(empresa_alvo) AS empresa_alvo, 
+    TRIM(categoria_servico) AS categoria_servico, 
+    TRIM(titulo) AS titulo,
 
     -- Anonimação de dados email, telefone e cpf
     REGEXP_REPLACE(
@@ -26,7 +31,7 @@ SELECT
         r'\(?\d{2}\)?\s?\d{4,5}-\d{4}', '[TELEFONE MASCARADO]'
     ) AS descricao_texto,
 
-    replica_empresa_texto,
+    TRIM(replica_empresa_texto) AS replica_empresa_texto,
 
     -- Padronização de dados trim tira espaço vazio, upper deixa o texto maiusculo
     -- INITCAP deixza a primeira letra das palavras em maiusculo e o resto minusculo
@@ -38,8 +43,11 @@ SELECT
     UPPER(TRIM(status_resolucao)) AS status_resolucao,
 
     -- dados que não precisam ser tratados nessa etapa
-    nota_consumidor, tempo_resposta_dias, houve_reconsideracao, score_prioridade_simulado,
-    tentativas_contato_previas,
+    SAFE_CAST(nota_consumidor AS INT64) AS nota_consumidor, 
+    SAFE_CAST(tempo_resposta_dias AS INT64) AS tempo_resposta_dias, 
+    CAST(houve_reconsideracao AS BOOL) AS houve_reconsideracao, 
+    UPPER(TRIM(score_prioridade_simulado)) AS score_prioridade_simulado,
+    TRIM(tentativas_contato_previas) AS tentativas_contato_previas,
 
     -- metadado para auditoria de rastreabilidade de linhagem
     CURRENT_TIMESTAMP() AS data_processamento_silver
@@ -51,33 +59,3 @@ WHERE
     -- descartando dados inuteis
     id_reclamacao IS NOT NULL
     AND data_postagem IS NOT NULL
-
-    --descartando dados inconsistentes
-    AND NOT(
-        (
-            categoria_servico IN ('Energia Elétrica', 'Saneamento / Água')
-            AND (
-                LOWER(descricao_texto) LIKE '%pedido comprado online%'
-                or LOWER(descricao_texto) LIKE '%atraso no prazo de entrega%'
-            )
-        )
-        OR
-        (
-            categoria_servico IN ('Varejo / E-commerce', 'Varejo / Shopping')
-            AND(
-                LOWER(descricao_texto) LIKE '%esgoto a ceu aberto%'
-                OR LOWER(descricao_texto) LIKE '%torneiras secas%'
-                OR LOWER(descricao_texto) Like '%abastecimento de água%'
-            )
-        )
-        OR
-        (
-            categoria_servico = 'Banda Larga / Internet'
-            AND(
-                LOWER(descricao_texto) LIKE '%oscilação constante de energia%'
-                OR LOWER(descricao_texto) LIKE '%vazamento na via pública%'
-            )
-        )
-    
-    )
-        
