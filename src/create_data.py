@@ -49,7 +49,99 @@ def simula_desconexao() -> None:
     logging.info("Simula encerramento de conexão e liberação de recursos")
     logging.info("Conexão finalizada, com Sucesso")
 
-   
+def gerar_texto_dinamico(tipo: str, empresa: str, cidade: str, uf: str, causa: str, bairro: str, cpf:str, tel: str, email: str) -> str:
+    saudacoes = {
+        "CRITICO": [
+            "É UM ABSURDO O QUE ESTÁ ACONTECENDO!",
+            "Inaceitável o descaso com os moradores.",
+            "Venho através deste canal registrar minha total indignação.",
+            "Não agumento mais essa situação recorrente!",
+            "Urgente! Preciso de providências imediatas."
+        ],
+        "MODERADO": [
+            "Gostaria de abrir um chamado sobre um problema recorrente.",
+            "Preciso de auxílio da empresa para resolver uma pendência.",
+            "Prezados, venho informar uma irregularidade no meu serviço.",
+            "Solicito verificação da equipe responsável.",
+            "Escrevo para relatar uma falha na prestação do serviço."
+        ],
+        "ELOGIO": [
+            "Gostaria de registrar meu elogio ao atendimento!",
+            "Parabéns pelo excelente trabalho prestado.",
+            "Venho manifestar minha satisfação com a equipe.",
+            "Muito satisfeito com a rapidez na solução!",
+            "Quero agradecer pelo suporte prestado hoje."
+        ],
+        "DUVIDA": [
+            "Olá, gostaria de tirar uma dúvida sobre minha conta/contrato.",
+            "Preciso de informações sobre os serviços na minha região.",
+            "Por gentileza, poderiam me esclarecer um procedimento?",
+            "Gostaria de entender melhor a cobrança deste mês.",
+            "Como faço para solicitar alterações no meu cadastro?"
+        ]
+    }
+    
+    contextos_locais =[
+        f"Moro no bairro {bairro} em {cidade}-{uf}",
+        f"Sou morador aqui perto do centro de {cidade}",
+        f"Tenho um estabelecimento comercial no bairro {bairro}",
+        f"Resido na região de {cidade}-{uf}, próximo ao bairro {bairro}",
+        f"A situação ocorre na minha residência localizada no {bairro}"
+    ]
+    
+    impactos = {
+        "CRITICO": [
+            "Estou com idosos e crianças em casa passando por dificuldades.",
+            "Isso prejudicou totalmente meu trabalho em home office hoje.",
+            "Já tive prejuízos financeiros por conta dessa falha grave.",
+            "A comunidade inteira está sendo afetada e sem suporte.",
+            "Tentei contato pelo SAC diversas vezes e desligaram na minha cara."
+        ],
+        "MODERADO": [
+            "Isso tem gerado transtornos no meu dia a dia.",
+            "Aguardando há dias por uma resposta formal.",
+            "O valor cobrado não condiz com o serviço contratado.",
+            "Já abri protocolos anteriores mas o problema retorna.",
+            "Espero que não precise acionar os órgãos de defesa do consumidor."
+        ],
+        "ELOGIO": [
+            "O técnico foi super atencioso e resolveu tudo em poucos minutos.",
+            "Serviço de altíssima qualidade, superou minhas expectativas.",
+            "A equipe de rua foi muito prestativa e educada.",
+            "Atendimento nota 10 do início ao fim.",
+            "Continuem com esse ótimo padrão de atendimento!"
+        ],
+        "DUVIDA": [
+            "Não encontrei essa informação clara no aplicativo nem no site.",
+            "Aguardando orientação para proceder da maneira correta.",
+            "Preciso organizar meu planejamento financeiro e necessito do detalhamento.",
+            "Se puderem me enviar por e-mail, agradeço.",
+            "Aguardo um retorno simples para sanar esta questão."
+        ]
+    }
+    
+    encerramentos = [
+        f"Meus dados para localização do contrato: CPF {cpf}, Celular {tel} e e-mail {email}.",
+        f"Podem entrar em contato pelo e-mail {email} ou telefone {tel}. Titular CPF: {cpf}.",
+        f"Registrado por titular do CPF {cpf}. Contato rápido via WhatsApp {tel}.",
+        f"Favor responder para {email}. Telefone de recado: {tel}.",
+        f"Aguardo retorno urgente no número {tel} ou e-mail {email}. CPF do titular: {cpf}."
+    ]
+    
+    s = random.choice(saudacoes[tipo])
+    c = random.choice(contextos_locais)
+    i = random.choice(impactos[tipo])
+    e = random.choice(encerramentos)
+    paragrafo_faker = fake.paragraph(nb_sentences=random.randint(1, 3))
+    
+    estruturas = [
+        f"{s} {c}. Relato: {causa}. {i} {e} {paragrafo_faker}",
+        f"{c}. {s} O problema é: {causa}. {paragrafo_faker} {i} {e}",
+        f"{s} {i} Sobre a {empresa}: {causa}. {c}. {e} ({paragrafo_faker})"
+    ]
+    
+    return random.choice(estruturas)
+ 
 # Função geradora de dados mockados dinamicamente, via Lib Faker
 def criar_dados(total_registros: int = 1000, data_inicio_janela: Optional[datetime] = None) -> List[Dict]:
     logging.info(f"Iniciando Geração de Dados ({total_registros} Registros)")
@@ -117,6 +209,7 @@ def criar_dados(total_registros: int = 1000, data_inicio_janela: Optional[dateti
         is_critico = random.random() < 0.35
 
         if is_critico:
+            tipo_relato = "CRITICO"
             problema = random.choice(setor["criticos"])
             # Simula FALHA DA TRIAGEM ORIGINAL 
             prioridade_canal = random.choice(["BAIXA", "MEDIA"]) if random.random() < 0.4 else "ALTA"
@@ -125,6 +218,7 @@ def criar_dados(total_registros: int = 1000, data_inicio_janela: Optional[dateti
             status_final = random.choice(["nao resolvida", "Em analise", "PENDENTE"])
             tentativas_num = random.randint(3, 7)
         else:
+            tipo_relato = "MODERADO"
             problema = random.choice(setor["moderados"])
             prioridade_canal = random.choice(["BAIXA", "MEDIA"])
             tempo_resposta = random.choice([1, 2, 3, 4])
@@ -137,12 +231,16 @@ def criar_dados(total_registros: int = 1000, data_inicio_janela: Optional[dateti
         email_ruido = fake.free_email()
         bairro_ruido = fake.bairro()
         
-        descricao_dinamica = (
-            f"Relato do consumidor residente no bairro {bairro_ruido}, em {emp['cidade']}-{emp['uf']}. "
-            f"Problema enfrentado: {problema}. "
-            f"Ja tentei contato com a {emp['nome']} por {tentativas_num} vezes sem sucesso. "
-            f"Contatos do titular: CPF {cpf_ruido}, celular {tel_ruido} e e-mail {email_ruido}. "
-            f"{fake.paragraph(nb_sentences=2)}"
+        descricao_dinamica = gerar_texto_dinamico(
+            tipo=tipo_relato,    # ex: "CRITICO", "MODERADO", "ELOGIO" ou "DUVIDA"
+            empresa=emp['nome'],
+            cidade=emp['cidade'],
+            uf=emp['uf'],
+            causa=problema,          # ou a variável referente ao problema/motivo sorteado
+            bairro=bairro_ruido,
+            cpf=cpf_ruido,
+            tel=tel_ruido,
+            email=email_ruido
         )
         
         replica_dinamica = (
@@ -168,14 +266,14 @@ def criar_dados(total_registros: int = 1000, data_inicio_janela: Optional[dateti
             "replica_empresa_texto": replica_dinamica,
             "cidade": cidade_com_ruido,
             "uf": uf_com_ruido,
-            "data_postagem": dt_postagem.strftime("%Y-%m-%d %H:%M:%S"),
+            "data_postagem": dt_postagem,
             "status_resolucao":status_final,
             "nota_consumidor": nota_consumidor,
             "tempo_resposta_dias": tempo_resposta,
             "houve_reconsideracao": True if (is_critico and random.random() < 0.5) else False,
             "score_prioridade_simulado": prioridade_canal,
             "tentativas_contato_previas": f"{tentativas_num} chamados abertos",
-            "data_ingestao": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            "data_ingestao": datetime.now()
         }
         registros.append(registro)
 

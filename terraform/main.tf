@@ -27,6 +27,16 @@ resource "google_storage_bucket" "bronze_bucket" {
   force_destroy               = true #desbloqueio da chave de segurança
   uniform_bucket_level_access = true #nivel de acesso do iam
 
+  # Ottimizaçãode custo - apagar arquivos antigos
+  lifecycle_rule {
+    condition {
+      age = 10  # Apaga dados com 10 dias no bucket
+    }
+    action {
+      type = "Delete"
+    }
+  }
+
   labels = {
     environment = var.environment
     layer       = "bronze"

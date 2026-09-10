@@ -3,55 +3,54 @@ config {
     schema: "gold_" + dataform.projectConfig.vars.environment,
     name: "tb_enriquecimento_llm",
     description: "Camada Gold: Relatos enriquecidos via LLM Gemini com analise de sentimento e causa-raiz",
-    uniqueKey:["id_reclamacao"],
+    dependencies: ["gemini_model"],
+    bigquery: {
+        partitionBy: "DATE(data_postagem)",
+        clusterBy: ["empresa_alvo", "sentimento"]
+    },
+    uniqueKey: ["id_reclamacao"],
     tags: ["gold_llm"]
 }
 
 WITH raw_llm AS (
     SELECT
-    id_reclamacao,
-    empresa_alvo,
-    categoria_servico,
-    cidade,
-    uf,
-    data_postagem,
-    -- Etapa 1: SANITIZAÇÃO DO TEXTO BRUTO JSON PARA EXTRAIR O OBJETO  JSON
-    REGEXP_REPLACE(
-        JSON_EXTRACT_SCALAR(ml_generate_text_result, '$.candidates[0].content.parts[0].text'),
-        r'```json\s*|^json\s*|```$', ''
-    ) AS json_limpo
-FROM
-    ML.GENERATE_TEXT(
-        MODEL ${ref("gemini_model")},
-        (
-            SELECT
-                id_reclamacao,
-                empresa_alvo,
-                categoria_servico,
-                cidade,
-                uf,
-                data_postagem,
-                CONCAT(
-                    'Voce eh um analista especialista em satisfacao do consumidor no Vale do Sao Francisco. ',
-                    'Analise a reclamacao abaixo e retorne EXCLUSIVAMENTE um objeto JSON valido no seguinte formato: ',
-                    '{"sentimento": "POSITIVO|NEUTRO|NEGATIVO", "causa_raiz": "Resumo em ate 5 palavras", "urgencia": "ALTA|MEDIA|BAIXA", "justificativa_urgencia": "Frase explicativa em ate 15 palavras", "acao_recomendada": "Acao pratica em ate 10 palavras"}. ',
-                    'EXEMPLO 1: Reclamacao: "Sem agua ha 3 dias no bairro Centro" -> Resposta: {"sentimento": "NEGATIVO", "causa_raiz": "Desabastecimento de agua", "urgencia": "ALTA", "justificativa_urgencia": "Interrupcao prolongada de servico essencial afetando necessidades basicas.", "acao_recomendada": "Enviar caminhao pipa e priorizar manutencao da rede local."}. ',
-                    'EXEMPLO 2: Reclamacao: "Minha fatura veio com R$ 15 a mais e nao entendi a taxa cobrada" -> Resposta: {"sentimento": "NEUTRO", "causa_raiz": "Divergencia de cobranca", "urgencia": "MEDIA", "justificativa_urgencia": "Duvida financeira pontual sem interrupcao de servico ativo.", "acao_recomendada": "Enviar detalhamento de faturamento e estornar valor se indevido."}. ',
-                    'EXEMPLO 3: Reclamacao: "O tecnico veio no horario e resolveu o problema rapidamente, excelente atendimento" -> Resposta: {"sentimento": "POSITIVO", "causa_raiz": "Elogio ao atendimento", "urgencia": "BAIXA", "justificativa_urgencia": "Atendimento concluido com sucesso e cliente satisfeito.", "acao_recomendada": "Registrar ponto positivo na ficha de desempenho do tecnico."}. ',
-                    'RECLAMACAO REAL: ', descricao_texto
-                ) AS prompt
-            FROM
-                ${ref("tb_reclame_aqui_clean")}
-            -- Logica incremental:filtra apenas novos registros se a tabela ja existir
-            ${when(incremental(), `WHERE data_postagem > (SELECT MAX(data_postagem) FROM ${self()})`)}
-            --Trava financeira 
-            --LIMIT 1000
-        ),
-        struct(
-            0.1 AS temperature,
-            256 AS max_output_tokens
+        id_reclamacao,
+        empresa_alvo,
+        categoria_servico,
+        cidade,
+        uf,
+        data_postagem,
+        -- Sanitizacao de blocos Markdown retornados pela LLM
+        REGEXP_REPLACE(
+            JSON_EXTRACT_SCALAR(ml_generate_text_result, '$.candidates[0].content.parts[0].text'),
+            r'(?s)^```json\s*|\s*```$', ''
+        ) AS json_limpo
+    FROM
+        ML.GENERATE_TEXT(
+            MODEL ${ref("gemini_model")},
+            (
+                SELECT
+                    id_reclamacao,
+                    empresa_alvo,
+                    categoria_servico,
+                    cidade,
+                    uf,
+                    data_postagem,
+                    CONCAT(
+                        'Voce eh um analista especialista em satisfacao do consumidor no Vale do Sao Francisco. ',
+                        'Analise a reclamacao abaixo e retorne EXCLUSIVAMENTE um objeto JSON valido no seguinte formato: ',
+                        '{"sentimento": "POSITIVO|NEUTRO|NEGATIVO", "causa_raiz": "Resumo em ate 5 palavras", "urgencia": "ALTA|MEDIA|BAIXA", "justificativa_urgencia": "Frase explicativa em ate 15 palavras", "acao_recomendada": "Acao pratica em ate 10 palavras"}. ',
+                        'RECLAMACAO REAL: ', descricao_texto
+                    ) AS prompt
+                FROM
+                    ${ref("tb_reclame_aqui_clean")}
+                ${when(incremental(), `WHERE data_postagem > (SELECT COALESCE(MAX(data_postagem), TIMESTAMP('1970-01-01')) FROM ${self()})`)}
+            ),
+            STRUCT(
+                0.1 AS temperature,
+                256 AS max_output_tokens
+            )
         )
-    )
 )
 SELECT
     id_reclamacao,
@@ -60,7 +59,6 @@ SELECT
     cidade,
     uf,
     data_postagem,
-    --Etapa 2: EXTRAÇÃO PARA COLUNAS NATIVAS, CONVERSÃO DE JSON PARA COLUNAS E PADRONIZAÇÃO DE NOMES
     JSON_EXTRACT_SCALAR(json_limpo, '$.sentimento') AS sentimento,
     JSON_EXTRACT_SCALAR(json_limpo, '$.causa_raiz') AS causa_raiz,
     JSON_EXTRACT_SCALAR(json_limpo, '$.urgencia') AS urgencia,
@@ -69,4 +67,3 @@ SELECT
     CURRENT_TIMESTAMP() AS data_processamento_gold
 FROM
     raw_llm
-     

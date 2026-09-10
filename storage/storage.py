@@ -3,6 +3,8 @@ import io
 import sys
 import logging
 import pandas as pd
+import pyarrow as pa
+import pyarrow.parquet as pq
 from datetime import datetime
 from google.cloud import storage
 from google.api_core.exceptions import GoogleAPIError
@@ -45,7 +47,7 @@ def salvar_dados_bronze(data, bucket_setting: str, category_folder: str = "recla
         try:
             os.makedirs(output_dir, exist_ok=True)
         except Exception as e:
-            logging.error(f"Falha Critica para criar diretorio local '{output_dir}': {str(e)}")
+            logging.error(f"Falha Crítica para criar diretório local '{output_dir}': {str(e)}")
             sys.exit(1)
     else:
         gcs_full_prefix = f"{env_base_prefix}{EXECUTION_DATE_FOLDER}"
@@ -54,9 +56,17 @@ def salvar_dados_bronze(data, bucket_setting: str, category_folder: str = "recla
     # Conversão dos dados e cálculo de paginação
     try:
         df = pd.json_normalize(data)
+        
+        # Casting explicito de tipos para evitar divergencia de schema entre lotes
+        df['nota_consumidor'] = pd.to_numeric(df['nota_consumidor'], errors='coerce').fillna(0).astype('int64')
+        df['tempo_resposta_dias'] = pd.to_numeric(df['tempo_resposta_dias'], errors='coerce').fillna(0).astype('int64')
+        df['data_postagem'] = pd.to_datetime(df['data_postagem'])
+        df['data_postagem'] = pd.to_datetime(df['data_ingestao'])
+        
         total_records = len(df)
         total_parts = (total_records + page_size - 1) // page_size
         logging.info(f"Processando {total_records} registros em {total_parts} arquivo(s) Parquet.")
+        
     except Exception as e:
         logging.error(f"ERRO ao converter registros para DataFrame: {str(e)}")
         sys.exit(1)
@@ -66,7 +76,7 @@ def salvar_dados_bronze(data, bucket_setting: str, category_folder: str = "recla
     bucket = None
     if not is_local_only:
         if not bucket_name:
-            logging.error("Nome do Bucket (GCP_BRONZE_BUCKET / GCS_BUCKET_NAME) não configurado.")
+            logging.error("Nome do Bucket não configurado.")
             sys.exit(1)
         try:
             client = storage.Client(project=gcp_project_id) if gcp_project_id else storage.Client()
@@ -85,7 +95,7 @@ def salvar_dados_bronze(data, bucket_setting: str, category_folder: str = "recla
                     if blob.name.endswith(".parquet"):
                         blob.delete()
                         count_deleted += 1
-                logging.info(f"[Backfill / TRUNCATE NUVEM ]: Sucesso: {count_deleted} arquivo(s) antigo(s) apagado(s)  do GCS")
+                logging.info(f"[Backfill TRUNCATE NUVEM ]: Sucesso: {count_deleted} arquivo(s) antigo(s) apagado(s)  do GCS")
             except Exception as e:
                 logging.error(f"ERRO ao conectar ou limpar o GCS - Google Cloud Storage: {str(e)}")
                 sys.exit(1)
@@ -104,7 +114,7 @@ def salvar_dados_bronze(data, bucket_setting: str, category_folder: str = "recla
             local_filepath = os.path.join(output_dir, filename)
             try:
                 df_chunk.to_parquet(local_filepath, index=False, engine='pyarrow')
-                logging.info(f"[Salvamento de arquivos locais] arquivo salvo em: {local_filepath}")
+                logging.info(f"[Salvamento local] arquivo salvo em: {local_filepath}")
             except Exception as e:
                 logging.error(f"ERRO ao gerar Parquet local '{local_filepath}': {str(e)}")
                 sys.exit(1)
@@ -124,7 +134,7 @@ def salvar_dados_bronze(data, bucket_setting: str, category_folder: str = "recla
                 logging.error(f"ERRO na API do GCP durante upload: {str(gcp_err)}")
                 sys.exit(1)
             except Exception as e:
-                logging.error(f"ERRO ao gerar/enviar Parquet em memoria: {str(e)}")
+                logging.error(f"ERRO ao gerar/enviar Parquet: {str(e)}")
                 sys.exit(1)
     logging.info("Processo Concluido com Sucesso Absoluto")
 

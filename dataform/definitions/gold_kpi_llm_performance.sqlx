@@ -1,0 +1,63 @@
+config {
+    type: "table",
+    schema: "gold_" + dataform.projectConfig.vars.environment,
+    name: "tb_kpi_llm_performance",
+    description: "Camada Gold: Métricas técnicas de qualidade, parsing e acurácia do Gemini",
+    dependencies: [
+      "tb_enriquecimento_llm",
+      "gemini_model"
+    ],
+    bigquery: {
+        partitionBy: "data_execucao"
+    },
+    tags: ["gold", "kpi"]
+}
+
+WITH silver_stats AS (
+    SELECT
+        DATE(data_postagem) AS data_execucao,
+        COUNT(1) AS total_processado_silver,
+        COUNTIF(REGEXP_CONTAINS(descricao_texto, r'\[CPF MASCARADO\]')) AS total_cpfs_mascarados,
+        COUNTIF(REGEXP_CONTAINS(descricao_texto, r'\[EMAIL MASCARADO\]')) AS total_emails_mascarados,
+        COUNTIF(REGEXP_CONTAINS(descricao_texto, r'\[TELEFONE MASCARADO\]')) AS total_telefones_mascarados
+    FROM
+        ${ref("tb_reclame_aqui_clean")}
+    GROUP BY
+        1
+),
+
+gold_llm_stats AS (
+    SELECT
+        DATE(data_postagem) AS data_execucao,
+        COUNT(1) AS total_enviado_llm,
+        COUNTIF(sentimento IS NOT NULL) AS json_parsed_sucesso,
+        COUNTIF(sentimento IS NULL) AS json_parsed_falha,
+        COUNTIF(sentimento = 'NEGATIVO') AS total_negativos,
+        COUNTIF(sentimento = 'NEUTRO') AS total_neutros,
+        COUNTIF(sentimento = 'POSITIVO') AS total_positivos,
+        COUNTIF(urgencia = 'ALTA') AS total_urgencia_alta
+    FROM
+        ${ref("tb_enriquecimento_llm")}
+    GROUP BY
+        1
+)
+
+SELECT
+    s.data_execucao,
+    s.total_processado_silver,
+    s.total_cpfs_mascarados,
+    s.total_emails_mascarados,
+    s.total_telefones_mascarados,
+    COALESCE(g.total_enviado_llm, 0) AS total_enviado_llm,
+    COALESCE(g.json_parsed_sucesso, 0) AS json_parsed_sucesso,
+    COALESCE(g.json_parsed_falha, 0) AS json_parsed_falha,
+    ROUND(SAFE_DIVIDE(g.json_parsed_sucesso, g.total_enviado_llm) * 100, 2) AS taxa_sucesso_parsing_pct,
+    COALESCE(g.total_negativos, 0) AS total_negativos,
+    COALESCE(g.total_neutros, 0) AS total_neutros,
+    COALESCE(g.total_positivos, 0) AS total_positivos,
+    COALESCE(g.total_urgencia_alta, 0) AS total_urgencia_alta,
+    CURRENT_TIMESTAMP() AS data_processamento
+FROM
+    silver_stats s
+LEFT JOIN
+    gold_llm_stats g ON s.data_execucao = g.data_execucao
