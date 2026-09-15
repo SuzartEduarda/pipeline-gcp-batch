@@ -44,7 +44,7 @@ WITH raw_llm AS (
                     ) AS prompt
                 FROM
                     ${ref("tb_reclame_aqui_clean")}
-                ${when(incremental(), `WHERE data_postagem > (SELECT COALESCE(MAX(data_postagem), TIMESTAMP('1970-01-01')) FROM ${self()})`)}
+                ${when(incremental(), `WHERE id_reclamacao NOT IN (SELECT id_reclamacao FROM ${self()})`)}
             ),
             STRUCT(
                 0.1 AS temperature,
