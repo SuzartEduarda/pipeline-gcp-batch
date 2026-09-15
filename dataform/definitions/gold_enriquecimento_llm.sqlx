@@ -59,9 +59,23 @@ SELECT
     cidade,
     uf,
     data_postagem,
-    JSON_EXTRACT_SCALAR(json_limpo, '$.sentimento') AS sentimento,
+    -- Tratamento de Sentimento
+    CASE 
+        WHEN UPPER(TRIM(JSON_EXTRACT_SCALAR(json_limpo, '$.sentimento'))) IN ('POSITIVO', 'NEUTRO', 'NEGATIVO') 
+            THEN UPPER(TRIM(JSON_EXTRACT_SCALAR(json_limpo, '$.sentimento')))
+        ELSE 'NEUTRO'
+    END AS sentimento,
+    
     JSON_EXTRACT_SCALAR(json_limpo, '$.causa_raiz') AS causa_raiz,
-    JSON_EXTRACT_SCALAR(json_limpo, '$.urgencia') AS urgencia,
+    
+    -- Higienizacao da Urgencia (Corrige incoerencias da LLM)
+    CASE 
+        WHEN UPPER(TRIM(JSON_EXTRACT_SCALAR(json_limpo, '$.urgencia'))) IN ('ALTA', 'ALALTA') THEN 'ALTA'
+        WHEN UPPER(TRIM(JSON_EXTRACT_SCALAR(json_limpo, '$.urgencia'))) IN ('MEDIA', 'MÉDIA') THEN 'MEDIA'
+        WHEN UPPER(TRIM(JSON_EXTRACT_SCALAR(json_limpo, '$.urgencia'))) = 'BAIXA' THEN 'BAIXA'
+        ELSE 'MEDIA'
+    END AS urgencia,
+    
     JSON_EXTRACT_SCALAR(json_limpo, '$.justificativa_urgencia') AS justificativa_urgencia,
     JSON_EXTRACT_SCALAR(json_limpo, '$.acao_recomendada') AS acao_recomendada,
     CURRENT_TIMESTAMP() AS data_processamento_gold

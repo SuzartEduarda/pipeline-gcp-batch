@@ -1,7 +1,10 @@
 import os
+import re
+import glob
 import random
 import shutil
 import logging
+import pandas as pd
 from datetime import datetime, timedelta
 from typing import List, Dict, Tuple, Optional
 from dotenv import load_dotenv
@@ -22,7 +25,29 @@ INCREMENTAL_DAYS = int(os.getenv("INCREMENTAL_DAYS", "3"))
 VOLUMETRIA_INCREMENTAL = int(os.getenv("VOLUMETRIA_INCREMENTAL", "1000"))
 VOLUMETRIA_BACKFILL = int(os.getenv("VOLUMETRIA_BACKFILL", "2500"))
 #Timestamp de id unico fixo 
-EXECUTION_STAMP = datetime.now().strftime("%Y%m%d%H%M")
+EXECUTION_STAMP = datetime.now().strftime("%Y%m%d%H%M%S")
+
+# Varre a pasta local do dia ou consulta os IDs existentes para encontrar o maior sequencial já gerado 
+# para o nome do arquivo e retornar o proximo numero
+def check_sequencial(diretorio_dia: str, prefixo_data: str) -> int:
+    if not os.path.exists(diretorio_dia):
+        return 1
+
+    maior_seq = 0
+    arquivos_parquet = glob.glob(os.path.join(diretorio_dia, "*.parquet"))
+
+    for arq in arquivos_parquet:
+        try:
+            df_temp = pd.read_parquet(arq, columns=["id_reclamacao"])
+            for id_val in df_temp["id_reclamacao"].dropna():
+                match = re.search(r'-(\d{5})$', str(id_val))
+                if match:
+                    seq = int(match.group(1))
+                    if seq > maior_seq:
+                        maior_seq = seq
+        except Exception:
+            continue
+    return maior_seq + 1
 
 # Função para calcular a data limite de corte de reclamações
 def obter_corte_data(is_incremental: Optional[bool] = None, delta_days: Optional[int] = None) -> datetime:
@@ -143,8 +168,8 @@ def gerar_texto_dinamico(tipo: str, empresa: str, cidade: str, uf: str, causa: s
     return random.choice(estruturas)
  
 # Função geradora de dados mockados dinamicamente, via Lib Faker
-def criar_dados(total_registros: int = 1000, data_inicio_janela: Optional[datetime] = None) -> List[Dict]:
-    logging.info(f"Iniciando Geração de Dados ({total_registros} Registros)")
+def criar_dados(total_registros: int = 100, data_inicio_janela: Optional[datetime] = None, is_incremental: bool = True) -> List[Dict]:
+    logging.info(f"Iniciando Geração de Dados ({total_registros} Registros) | Modo Incremental: {is_incremental}")
 
     # Garantia de datas restritas a janela ativa sem descartar dados
     inicio_sorteio = data_inicio_janela if data_inicio_janela else DATA_MINIMA
@@ -199,6 +224,17 @@ def criar_dados(total_registros: int = 1000, data_inicio_janela: Optional[dateti
     
     canais = ["Consumidor.gov.br (Simulado)", "Reclame Aqui (Simulado)", "Portal Web Direct"]    
     registros = []
+    
+    #definir o diretorio do dia atual
+    data_hoje = datetime.now().strftime("%Y%m%d")
+    pasta_dia = os.path.join("data", data_hoje)
+                
+    if is_incremental:
+        seq_inicial = check_sequencial(pasta_dia, data_hoje)
+    else:
+        seq_inicial = 1              
+    # gerar o imestamp da execução com segundos
+    stamp_execucao = datetime.now().strftime("%Y%m%d%H%M%S")
 
     for idx in range(1, total_registros + 1):
         cat_nome = random.choice(list(DADOS_CATEGORIZADOS.keys()))
@@ -206,25 +242,42 @@ def criar_dados(total_registros: int = 1000, data_inicio_janela: Optional[dateti
         emp = random.choice(setor["empresas"])
         
         # Regra 35% das reclamaações são criticas
-        is_critico = random.random() < 0.35
+        sorteio = random.random()
 
-        if is_critico:
+        if sorteio < 0.35:
             tipo_relato = "CRITICO"
             problema = random.choice(setor["criticos"])
-            # Simula FALHA DA TRIAGEM ORIGINAL 
             prioridade_canal = random.choice(["BAIXA", "MEDIA"]) if random.random() < 0.4 else "ALTA"
             tempo_resposta = random.choice([5, 7, 10, 14])
             nota_consumidor = random.choice([1, 2])
             status_final = random.choice(["nao resolvida", "Em analise", "PENDENTE"])
             tentativas_num = random.randint(3, 7)
-        else:
+        elif sorteio < 0.75:
             tipo_relato = "MODERADO"
             problema = random.choice(setor["moderados"])
             prioridade_canal = random.choice(["BAIXA", "MEDIA"])
             tempo_resposta = random.choice([1, 2, 3, 4])
-            nota_consumidor = random.choice([3, 4, 5])
+            nota_consumidor = random.choice([3, 4])
             status_final = random.choice(["Resolvido", "Em Analise"])
             tentativas_num = random.randint(1, 2)
+        elif sorteio < 0.90:
+            tipo_relato = "DUVIDA"
+            problema = "Solicitacao de informacoes e esclarecimentos sobre fatura e contrato"
+            prioridade_canal = "BAIXA"
+            tempo_resposta = random.choice([1, 2])
+            nota_consumidor = 4
+            status_final = "Resolvido"
+            tentativas_num = 1
+        else:
+            tipo_relato = "ELOGIO"
+            problema = "Elogio e agradecimento pela agilidade no atendimento prestado"
+            prioridade_canal = "BAIXA"
+            tempo_resposta = 1
+            nota_consumidor = 5
+            status_final = "Resolvido"
+            tentativas_num = 1
+
+        is_critico = (tipo_relato == "CRITICO")
             
         cpf_ruido =fake.cpf()
         tel_ruido = fake.cellphone_number()
@@ -251,10 +304,13 @@ def criar_dados(total_registros: int = 1000, data_inicio_janela: Optional[dateti
         cidade_com_ruido = emp["cidade"].lower() if idx % 2 == 0 else emp["cidade"].upper()
         uf_com_ruido = emp["uf"].lower() if idx % 3 == 0 else emp["uf"]
         
-        segundos_aleatorios = random.randint(0, intervalo_segundos)
+        segundos_aleatorios = random.randint(0, max(0, intervalo_segundos))
         dt_postagem = inicio_sorteio + timedelta(seconds=segundos_aleatorios)
         
-        id_unico = f"CG-MOCK-{EXECUTION_STAMP}-{idx:05d}"
+        agora = datetime.now()
+        timestamp_preciso = agora.strftime("%Y%m%d%H%M%S") + f"{agora.microsecond:06d}"
+        id_seq_atual = seq_inicial + (idx - 1)
+        id_unico = f"CG-MOCK-{timestamp_preciso}-{id_seq_atual:05d}"
             
         registro = {
             "id_reclamacao": id_unico,
@@ -266,14 +322,14 @@ def criar_dados(total_registros: int = 1000, data_inicio_janela: Optional[dateti
             "replica_empresa_texto": replica_dinamica,
             "cidade": cidade_com_ruido,
             "uf": uf_com_ruido,
-            "data_postagem": dt_postagem,
+            "data_postagem": dt_postagem.strftime("%Y-%m-%d %H:%M:%S"),
             "status_resolucao":status_final,
             "nota_consumidor": nota_consumidor,
             "tempo_resposta_dias": tempo_resposta,
             "houve_reconsideracao": True if (is_critico and random.random() < 0.5) else False,
             "score_prioridade_simulado": prioridade_canal,
             "tentativas_contato_previas": f"{tentativas_num} chamados abertos",
-            "data_ingestao": datetime.now()
+            "data_ingestao": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         }
         registros.append(registro)
 
@@ -315,7 +371,8 @@ def dados_reclamacao(is_incremental: Optional[bool] = None, delta_days: Optional
     #Gerar registros já alinhados com a janela temporal definida
     reclamacoes_geradas = criar_dados(
         total_registros=volumetria,
-        data_inicio_janela=corte_dedata
+        data_inicio_janela=corte_dedata,
+        is_incremental=inc
     )
 
     has_error = False

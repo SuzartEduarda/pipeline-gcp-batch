@@ -38,7 +38,11 @@ SELECT
     UPPER(TRIM(uf)) AS uf,
 
     -- Conversao para TIMESTAMP
-    SAFE.PARSE_TIMESTAMP('%Y-%m-%d %H:%M:%S', CAST(data_postagem AS STRING)) AS data_postagem,
+    COALESCE(
+    SAFE.PARSE_TIMESTAMP('%Y-%m-%d %H:%M:%S', CAST(data_postagem AS STRING)),
+    SAFE_CAST(data_postagem AS TIMESTAMP)
+    ) AS data_postagem,
+    
     UPPER(TRIM(status_resolucao)) AS status_resolucao,
 
     CAST(nota_consumidor AS INT64) AS nota_consumidor, 
@@ -53,3 +57,6 @@ FROM
 WHERE
     id_reclamacao IS NOT NULL
     AND data_postagem IS NOT NULL
+
+-- Deduplicação por id_reclamacao pegando o registro mais recente
+QUALIFY ROW_NUMBER() OVER (PARTITION BY id_reclamacao ORDER BY data_postagem DESC) = 1
