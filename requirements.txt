@@ -1,17 +1,15 @@
-# Para fazer as requisições na API do GitHub
-requests>=2.31.0
+# Bibliotecas GCP
+    google-cloud-bigquery>=3.18.0
+    google-cloud-storage>=2.14.0
+    google-api-python-client
+    google-auth-httplib2
+    google-auth-oauthlib
 
-# Biblioteca oficial do Google para interagir com o BigQuery
-google-cloud-bigquery>=3.18.0
+    # Manipulação e persistência de dados (Parquet)
+    pandas
+    pyarrow
 
-# Para manipulação de dados estruturados e tabelas antes do envio
-google-cloud-storage>=2.14.0
-
-# Para carregar o token do arquivo .env de forma segura
-python-dotenv>=1.0.1
-
-# Para autenticação e autorização com a API do Google
-google-api-python-client
-google-auth-httplib2
-google-auth-oauthlib
-google-cloud-storagefaker
+    # Geração de dados sintéticos e utilitários
+    Faker
+    python-dotenv>=1.0.1
+    requests>=2.31.0

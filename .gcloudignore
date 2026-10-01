@@ -1,0 +1,27 @@
+.git
+*_SA/
+_SA/
+.env
+.env.*
+gcp-credentials.json
+token.json
+.gitignore
+.venv/
+venv/
+_pycache_/
+data/
+.terraform/
+.vscode/
+# Arquivos locais e estados do Terraform
+.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfstate.*.backup
+.terraform.lock.hcl
+
+# Ignorar arquivos de variáveis que contêm senhas/tokens
+*.tfvars
+*.tfvars.json
+
+*.df-credentials.json
+dataform/.df-credentials.json

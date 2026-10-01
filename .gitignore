@@ -1,9 +1,8 @@
 # Ambiente Virtual Local
 .venv/
+.venv_test
 venv/
 
-.dockerignore
-.gcloudignore
 # Service Account Keys
 _SA/
 *.json

@@ -1,0 +1,40 @@
+# Ignora arquivos de controle do Git
+.git
+.gitignore
+*_SA/
+_SA/
+gcp-credentials.json
+token.json
+.env
+.env.*
+# Ignora o ambiente virtual Python local (O Docker vai criar o dele!)
+.venv/
+venv/
+
+# Ignora caches do Python
+_pycache_/
+*.pyc
+*.pyo
+*.pyd
+
+# Ignora dados locais e logs
+data/
+*.log
+
+# Ignora pastas do Terraform e ide
+.terraform/
+.vscode/
+README.md
+# Arquivos locais e estados do Terraform
+.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfstate.*.backup
+.terraform.lock.hcl
+
+# Ignorar arquivos de variáveis que contêm senhas/tokens
+*.tfvars
+*.tfvars.json
+
+*.df-credentials.json
+dataform/.df-credentials.json
