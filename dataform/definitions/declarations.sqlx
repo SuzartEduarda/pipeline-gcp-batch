@@ -1,0 +1,6 @@
+config {
+    type: "declaration",
+    database: dataform.projectConfig.defaultProject,
+    schema: "silver_" + dataform.projectConfig.vars.environment,
+    name: "tb_reclame_aqui_raw"
+}

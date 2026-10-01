@@ -1,0 +1,62 @@
+config {
+    type: "table",
+    schema: "silver_" + dataform.projectConfig.vars.environment,
+    name: "tb_reclame_aqui_clean",
+    description: "Camada Silver: Dados higienizados, deduplicados, anonimizados e validados",
+    bigquery: {
+        partitionBy: "DATE(data_postagem)",
+        clusterBy: ["empresa_alvo", "status_resolucao"]
+    },
+    assertions: {
+        uniqueKey: ["id_reclamacao"],
+        nonNull: ["id_reclamacao", "data_postagem", "empresa_alvo", "categoria_servico"]
+    },
+    tags: ["silver"]
+}
+
+SELECT
+    id_reclamacao, 
+    UPPER(TRIM(canal_origem)) AS canal_origem, 
+    TRIM(empresa_alvo) AS empresa_alvo, 
+    TRIM(categoria_servico) AS categoria_servico, 
+    TRIM(titulo) AS titulo,
+
+    -- Anonimissacao de CPF, Email e Telefone
+    REGEXP_REPLACE(
+        REGEXP_REPLACE(
+            REGEXP_REPLACE(
+                descricao_texto,
+                r'\b\d{3}\.\d{3}\.\d{3}-\d{2}\b', '[CPF MASCARADO]'
+            ),
+            r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', '[EMAIL MASCARADO]'
+        ),
+        r'\(?\d{2}\)?\s?\d{4,5}-\d{4}', '[TELEFONE MASCARADO]'
+    ) AS descricao_texto,
+
+    TRIM(replica_empresa_texto) AS replica_empresa_texto,
+    INITCAP(TRIM(cidade)) AS cidade,
+    UPPER(TRIM(uf)) AS uf,
+
+    -- Conversao para TIMESTAMP
+    COALESCE(
+    SAFE.PARSE_TIMESTAMP('%Y-%m-%d %H:%M:%S', CAST(data_postagem AS STRING)),
+    SAFE_CAST(data_postagem AS TIMESTAMP)
+    ) AS data_postagem,
+    
+    UPPER(TRIM(status_resolucao)) AS status_resolucao,
+
+    CAST(nota_consumidor AS INT64) AS nota_consumidor, 
+    CAST(tempo_resposta_dias AS INT64) AS tempo_resposta_dias, 
+    CAST(houve_reconsideracao AS BOOL) AS houve_reconsideracao, 
+    UPPER(TRIM(score_prioridade_simulado)) AS score_prioridade_simulado,
+    TRIM(tentativas_contato_previas) AS tentativas_contato_previas,
+
+    CURRENT_TIMESTAMP() AS data_processamento_silver
+FROM
+    ${ref("tb_reclame_aqui_raw")}
+WHERE
+    id_reclamacao IS NOT NULL
+    AND data_postagem IS NOT NULL
+
+-- Deduplicação por id_reclamacao pegando o registro mais recente
+QUALIFY ROW_NUMBER() OVER (PARTITION BY id_reclamacao ORDER BY data_postagem DESC) = 1

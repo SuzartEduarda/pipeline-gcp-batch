@@ -1,0 +1,83 @@
+config {
+    type: "incremental",
+    schema: "gold_" + dataform.projectConfig.vars.environment,
+    name: "tb_enriquecimento_llm",
+    description: "Camada Gold: Relatos enriquecidos via LLM Gemini com analise de sentimento e causa-raiz",
+    dependencies: ["gemini_model"],
+    bigquery: {
+        partitionBy: "DATE(data_postagem)",
+        clusterBy: ["empresa_alvo", "sentimento"]
+    },
+    uniqueKey: ["id_reclamacao"],
+    tags: ["gold_llm"]
+}
+
+WITH raw_llm AS (
+    SELECT
+        id_reclamacao,
+        empresa_alvo,
+        categoria_servico,
+        cidade,
+        uf,
+        data_postagem,
+        -- Sanitizacao de blocos Markdown retornados pela LLM
+        REGEXP_REPLACE(
+            JSON_EXTRACT_SCALAR(ml_generate_text_result, '$.candidates[0].content.parts[0].text'),
+            r'(?s)^```json\s*|\s*```$', ''
+        ) AS json_limpo
+    FROM
+        ML.GENERATE_TEXT(
+            MODEL ${ref("gemini_model")},
+            (
+                SELECT
+                    id_reclamacao,
+                    empresa_alvo,
+                    categoria_servico,
+                    cidade,
+                    uf,
+                    data_postagem,
+                    CONCAT(
+                        'Voce eh um analista especialista em satisfacao do consumidor no Vale do Sao Francisco. ',
+                        'Analise a reclamacao abaixo e retorne EXCLUSIVAMENTE um objeto JSON valido no seguinte formato: ',
+                        '{"sentimento": "POSITIVO|NEUTRO|NEGATIVO", "causa_raiz": "Resumo em ate 5 palavras", "urgencia": "ALTA|MEDIA|BAIXA", "justificativa_urgencia": "Frase explicativa em ate 15 palavras", "acao_recomendada": "Acao pratica em ate 10 palavras"}. ',
+                        'RECLAMACAO REAL: ', descricao_texto
+                    ) AS prompt
+                FROM
+                    ${ref("tb_reclame_aqui_clean")}
+                ${when(incremental(), `WHERE id_reclamacao NOT IN (SELECT id_reclamacao FROM ${self()})`)}
+            ),
+            STRUCT(
+                0.1 AS temperature,
+                256 AS max_output_tokens
+            )
+        )
+)
+SELECT
+    id_reclamacao,
+    empresa_alvo,
+    categoria_servico,
+    cidade,
+    uf,
+    data_postagem,
+    -- Tratamento de Sentimento
+    CASE 
+        WHEN UPPER(TRIM(JSON_EXTRACT_SCALAR(json_limpo, '$.sentimento'))) IN ('POSITIVO', 'NEUTRO', 'NEGATIVO') 
+            THEN UPPER(TRIM(JSON_EXTRACT_SCALAR(json_limpo, '$.sentimento')))
+        ELSE 'NEUTRO'
+    END AS sentimento,
+    
+    JSON_EXTRACT_SCALAR(json_limpo, '$.causa_raiz') AS causa_raiz,
+    
+    -- Higienizacao da Urgencia (Corrige incoerencias da LLM)
+    CASE 
+        WHEN UPPER(TRIM(JSON_EXTRACT_SCALAR(json_limpo, '$.urgencia'))) IN ('ALTA', 'ALALTA') THEN 'ALTA'
+        WHEN UPPER(TRIM(JSON_EXTRACT_SCALAR(json_limpo, '$.urgencia'))) IN ('MEDIA', 'MÉDIA') THEN 'MEDIA'
+        WHEN UPPER(TRIM(JSON_EXTRACT_SCALAR(json_limpo, '$.urgencia'))) = 'BAIXA' THEN 'BAIXA'
+        ELSE 'MEDIA'
+    END AS urgencia,
+    
+    JSON_EXTRACT_SCALAR(json_limpo, '$.justificativa_urgencia') AS justificativa_urgencia,
+    JSON_EXTRACT_SCALAR(json_limpo, '$.acao_recomendada') AS acao_recomendada,
+    CURRENT_TIMESTAMP() AS data_processamento_gold
+FROM
+    raw_llm

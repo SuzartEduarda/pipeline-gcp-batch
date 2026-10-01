@@ -1,0 +1,30 @@
+config {
+    type: "table",
+    schema: "gold_" + dataform.projectConfig.vars.environment,
+    name: "tb_kpi_desempenho_categorias",
+    description: "Camada Gold: Métricas agregadas de desempenho, volume e SLA por empresa e categoria",
+    dependencies: ["tb_reclame_aqui_clean"],
+    bigquery: {
+        clusterBy: ["empresa_alvo", "categoria_servico"]
+    },
+    assertions: {
+        uniqueKey: ["postagem_data_mes", "empresa_alvo", "categoria_servico"]
+    }
+}
+
+SELECT
+    FORMAT_TIMESTAMP('%Y-%m', data_postagem) AS postagem_data_mes,
+    empresa_alvo,
+    categoria_servico,
+    COUNT(id_reclamacao) AS total_reclamacao,
+    ROUND(AVG(tempo_resposta_dias), 2) AS tempo_medio_resposta_dias,
+    ROUND(AVG(nota_consumidor), 2) AS nota_media_consumidor,
+    COUNTIF(score_prioridade_simulado = 'ALTA') AS total_prioridade_alta,
+    COUNTIF(score_prioridade_simulado = 'MEDIA') AS total_prioridade_media,
+    COUNTIF(score_prioridade_simulado = 'BAIXA') AS total_prioridade_baixa,
+    COUNTIF(houve_reconsideracao = TRUE) AS total_reconsideracoes,
+    CURRENT_TIMESTAMP() AS data_processamento_gold
+FROM
+    ${ref("tb_reclame_aqui_clean")}
+GROUP BY
+    1, 2, 3

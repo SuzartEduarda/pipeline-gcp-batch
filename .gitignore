@@ -1,11 +1,11 @@
 # Ambiente Virtual Local
 .venv/
+.venv_test
 venv/
 
-.dockerignore
-.gcloudignore
 # Service Account Keys
 _SA/
+*.json
 token.json
 credentials.json
 gcp-credentials.json
@@ -31,7 +31,8 @@ __pycache__/
 # SEGURANÇA MÁXIMA - Credenciais e Variáveis Locais
 .env
 *.json.vscode/
-
+*.df-credentials.json
+dataform/.df-credentials.json
 # Arquivos locais e estados do Terraform
 .terraform/
 *.tfstate

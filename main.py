@@ -3,9 +3,10 @@ import sys
 import logging
 import argparse
 from dotenv import load_dotenv
-
 from src.create_data import extract_reclame_aqui_data
 from storage.storage import save_raw_to_bronze
+from src.load_silver import carregar_bronze_para_silver
+
 
 load_dotenv()
 
@@ -17,7 +18,7 @@ def configurar_logs() -> None:
         handlers=[logging.StreamHandler(sys.stdout)]
     )
 
-# Função para ler parametros via linha ded comando
+# Função para ler parametros via linha de comando
 def obter_argumentos():
     parser = argparse.ArgumentParser(
         description="Pipeline Lakehouse: Geração de Dados Abertos Reais -> Camada Bronze (GCS/LOCAL)"
@@ -55,14 +56,20 @@ def obter_argumentos():
 def executar_pipeline() -> None:
     configurar_logs()
     args = obter_argumentos()
-    logging.info("INICIANDO pipeline: DADOS GERADOS (via Faker) -> CAMADA BRONZE")
+    logging.info("INICIANDO pipeline: DADOS GERADOS (via Faker) -> CAMADA BRONZE -> CAMADA SILVER")
 
-    #Resolução parametros de carga
+    #Resolução parametros de carga Padrão: Incremental
     is_incremental = None
     if args.backfill:
         is_incremental = False
-    elif args.incremental:
+        logging.info("Modo de carga: Backfill")
+    elif args.incremental: 
         is_incremental = True
+        logging.info("Modo de carga: Incremental, Padrão")
+    else:
+        env_incremental = os.getenv("INCREMENTAL", "True").lower() == "true"
+        is_incremental = env_incremental
+        logging.info(f"Modo de carga: Padrão: {is_incremental}")
     delta_days = args.days
 
     # Resolução de Variavel do Bucket
@@ -75,7 +82,7 @@ def executar_pipeline() -> None:
 
     # ETAPA 1: Geração de dados
     try:
-        logging.info("[ETAPA: 1/2] Gerando dados via Faker")
+        logging.info("[ETAPA: 1/3] Gerando dados via Faker")
         reclamacoes_extraidas, has_errors = extract_reclame_aqui_data(
             is_incremental=is_incremental,
             delta_days=delta_days
@@ -92,23 +99,31 @@ def executar_pipeline() -> None:
 
     # ETAPA 2: Grava os dados em Parquet de 100 em 100 itens
     try:
-        logging.info("[ETAPA: 2/2] Persistindo reclamações na Camada Bronze Parquet (em Lotes)")
+        logging.info("[ETAPA: 2/3] Persistindo reclamações na Camada Bronze Parquet (em Lotes)")
         save_raw_to_bronze(
             data=reclamacoes_extraidas,
             bucket_setting=bucket_setting,
             category_folder="reclame_aqui_data",
-            page_size=100
+            page_size=100,
+            is_incremental=is_incremental
         )
     except Exception as e:
         logging.error(f"ERRO CRÍTICO na etapa de persistência na Bronze: {str(e)}")
         sys.exit(1)
-
+    
+    # ETAPA 3: Carga relacional da camada Bronze (GCS) para Camada Silver (BQ)
+    try:
+        logging.info("[ETAPA 3/3] Carregando dados da Camada Bronze -> Camada Silver")
+        carregar_bronze_para_silver(is_incremental=is_incremental)
+    except Exception as e:
+        logging.error(f"ERRO CRITICO na etapa de carga para a Silver: {str(e)}")
+        sys.exit(1)
+    
     if has_errors:
         logging.warning("Pipeline concluído com alertas durante geração de dados.")
     else:
         logging.info("EXECUTADO COM SUCESSO ABSOLUTO")
     sys.exit(0)
-
 
 if __name__ == '__main__':
     executar_pipeline()
