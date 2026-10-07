@@ -9,7 +9,8 @@ config {
         clusterBy: ["empresa_alvo", "sentimento"]
     },
     uniqueKey: ["id_reclamacao"],
-    tags: ["gold_llm"]
+    tags: ["gold_llm"],
+    disabled: true
 }
 
 WITH raw_llm AS (

@@ -1,0 +1,128 @@
+name: CI/CD Pipeline GCP Batch
+
+on:
+  push:
+    branches: [ "main", "dev", "pre-release" ]
+  pull_request:
+    branches: [ "main", "dev" ]
+  schedule:
+    # Execução diária via Cron às 06:00 UTC (03:00 BRT)
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+    inputs:
+      execution_mode:
+        description: 'Modo de Execução da Carga'
+        required: true
+        default: 'default'
+        type: choice
+        options:
+          - default
+          - incremental
+          - backfill
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID || 'projeto-dados-pessoal' }}
+  ENVIRONMENT: ${{ vars.ENVIRONMENT || 'dev' }}
+  GCP_BRONZE_BUCKET: ${{ vars.GCP_BRONZE_BUCKET || 'projeto-dados-pessoal-dev-bronze-storage' }}
+  GCP_SA_EMAIL: ${{ secrets.GCP_SA_EMAIL || 'gh-actions-pipeline@projeto-dados-pessoal.iam.gserviceaccount.com' }}
+  GCP_WORKLOAD_PROVIDER: ${{ secrets.GCP_WORKLOAD_PROVIDER || 'projects/415816500837/locations/global/workloadIdentityPools/pipeline-github-pool/providers/github-provider' }}
+  GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+
+jobs:
+  ci-test-and-lint:
+    name: "CI: Validação, Lint e Build Docker"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout do Repositório
+        uses: actions/checkout@v4
+
+      - name: Configurar Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Instalar Dependências Python
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Testar Sintaxe e Importações Python
+        run: |
+          python -c "import main; print('main.py import OK')"
+          python -c "from src.create_data import extract_reclame_aqui_data; print('create_data import OK')"
+          python -c "from storage.storage import save_raw_to_bronze; print('storage import OK')"
+          python -c "from src.enrich_llm import executar_enriquecimento; print('enrich_llm import OK')"
+
+      - name: Configurar Node.js e Validar Dataform
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Compilar Dataform
+        run: |
+          npm install -g @dataform/cli
+          cd dataform
+          dataform compile
+
+      - name: Build do Contêiner Docker
+        run: |
+          docker build -t pipeline-gcp-batch:latest .
+
+  cd-execute-pipeline:
+    name: "CD: Execução do Pipeline GCP Batch"
+    needs: ci-test-and-lint
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout do Repositório
+        uses: actions/checkout@v4
+
+      - name: Autenticação Google Cloud via Workload Identity Federation
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.GCP_WORKLOAD_PROVIDER }}
+          service_account: ${{ env.GCP_SA_EMAIL }}
+
+      - name: Configurar Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configurar Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Instalar Dependências
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Executar Ingestão Batch (Faker -> GCS Bronze -> BigQuery Silver)
+        run: |
+          MODE="${{ github.event.inputs.execution_mode || 'default' }}"
+          if [ "$MODE" = "backfill" ]; then
+            python main.py --backfill
+          elif [ "$MODE" = "incremental" ]; then
+            python main.py --incremental
+          else
+            python main.py
+          fi
+
+      - name: Executar Enriquecimento Semântico via Gemini (Google AI Studio Free Tier)
+        if: env.GEMINI_API_KEY != ''
+        run: |
+          python src/enrich_llm.py
+
+      - name: Executar Transformações no BigQuery via Dataform (Silver & Gold)
+        run: |
+          npm install -g @dataform/cli
+          cd dataform
+          dataform run --tags silver,gold,kpi || true

@@ -13,3 +13,6 @@
     Faker
     python-dotenv>=1.0.1
     requests>=2.31.0
+
+    # LLM / Gemini API (Google AI Studio Free Tier)
+    google-genai>=2.0.0

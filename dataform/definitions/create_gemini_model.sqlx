@@ -3,7 +3,8 @@ config {
     schema: "silver_" + dataform.projectConfig.vars.environment,
     name: "gemini_model",
     hasOutput: true,
-    tags: ["infra_llm"]
+    tags: ["infra_llm"],
+    disabled: true
 }
 
 CREATE OR REPLACE MODEL ${self()}
