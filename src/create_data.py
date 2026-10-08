@@ -22,8 +22,8 @@ DATA_MINIMA = datetime.strptime(DATA_MINIMA_SRT, "%Y-%m-%d")
 INCREMENTAL = os.getenv("INCREMENTAL", "True").lower() == "true"
 INCREMENTAL_DAYS = int(os.getenv("INCREMENTAL_DAYS", "3"))
 # VOLUMETRIA DE DADOS DINAMICA
-VOLUMETRIA_INCREMENTAL = int(os.getenv("VOLUMETRIA_INCREMENTAL", "1000"))
-VOLUMETRIA_BACKFILL = int(os.getenv("VOLUMETRIA_BACKFILL", "2500"))
+VOLUMETRIA_INCREMENTAL = int(os.getenv("VOLUMETRIA_INCREMENTAL", "100"))
+VOLUMETRIA_BACKFILL = int(os.getenv("VOLUMETRIA_BACKFILL", "500"))
 #Timestamp de id unico fixo 
 EXECUTION_STAMP = datetime.now().strftime("%Y%m%d%H%M%S")
 
@@ -356,8 +356,8 @@ def dados_reclamacao(is_incremental: Optional[bool] = None, delta_days: Optional
     corte_dedata = obter_corte_data(is_incremental=inc, delta_days=delta_days)
 
     # leitura dinamica de variaveis
-    volumetria_backfill = int(os.getenv("VOLUMETRIA_BACKFILL", "2500"))
-    volumetria_incremental = int(os.getenv("VOLUMETRIA_INCREMENTAL", "1000"))
+    volumetria_backfill = int(os.getenv("VOLUMETRIA_BACKFILL", "500"))
+    volumetria_incremental = int(os.getenv("VOLUMETRIA_INCREMENTAL", "100"))
 
     #Se for backfill (inc == False), executa o Truncate(Reset)
     if not inc:

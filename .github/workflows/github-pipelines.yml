@@ -31,6 +31,10 @@ env:
   GCP_SA_EMAIL: ${{ secrets.GCP_SA_EMAIL || 'gh-actions-pipeline@projeto-dados-pessoal.iam.gserviceaccount.com' }}
   GCP_WORKLOAD_PROVIDER: ${{ secrets.GCP_WORKLOAD_PROVIDER || 'projects/415816500837/locations/global/workloadIdentityPools/pipeline-github-pool/providers/github-provider' }}
   GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+  VOLUMETRIA_INCREMENTAL: ${{ vars.VOLUMETRIA_INCREMENTAL || '100' }}
+  VOLUMETRIA_BACKFILL: ${{ vars.VOLUMETRIA_BACKFILL || '500' }}
+  INCREMENTAL_DAYS: ${{ vars.INCREMENTAL_DAYS || '3' }}
+  GEMINI_MODEL: ${{ vars.GEMINI_MODEL || 'gemini-flash-lite-latest' }}
 
 jobs:
   ci-test-and-lint:
