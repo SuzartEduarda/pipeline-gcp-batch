@@ -7,7 +7,7 @@ on:
     branches: [ "main", "dev" ]
   schedule:
     # Execução diária via Cron às 06:00 UTC (03:00 BRT)
-    - cron: '0 6 * * *'
+    - cron: '0 12 * * *'
   workflow_dispatch:
     inputs:
       execution_mode:
