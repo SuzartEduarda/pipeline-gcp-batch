@@ -25,11 +25,11 @@ permissions:
   id-token: write
 
 env:
-  GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID || 'projeto-dados-pessoal' }}
+  GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
   ENVIRONMENT: ${{ vars.ENVIRONMENT || 'dev' }}
-  GCP_BRONZE_BUCKET: ${{ vars.GCP_BRONZE_BUCKET || 'projeto-dados-pessoal-dev-bronze-storage' }}
-  GCP_SA_EMAIL: ${{ secrets.GCP_SA_EMAIL || 'gh-actions-pipeline@projeto-dados-pessoal.iam.gserviceaccount.com' }}
-  GCP_WORKLOAD_PROVIDER: ${{ secrets.GCP_WORKLOAD_PROVIDER || 'projects/415816500837/locations/global/workloadIdentityPools/pipeline-github-pool/providers/github-provider' }}
+  GCP_BRONZE_BUCKET: ${{ vars.GCP_BRONZE_BUCKET }}
+  GCP_SA_EMAIL: ${{ secrets.GCP_SA_EMAIL }}
+  GCP_WORKLOAD_PROVIDER: ${{ secrets.GCP_WORKLOAD_PROVIDER }}
   GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
   VOLUMETRIA_INCREMENTAL: ${{ vars.VOLUMETRIA_INCREMENTAL || '100' }}
   VOLUMETRIA_BACKFILL: ${{ vars.VOLUMETRIA_BACKFILL || '500' }}
@@ -120,13 +120,18 @@ jobs:
             python main.py
           fi
 
+      - name: Executar Higienização e Anonimização LGPD no BigQuery via Dataform (Silver)
+        run: |
+          npm install -g @dataform/cli
+          cd dataform
+          dataform run --tags silver
+
       - name: Executar Enriquecimento Semântico via Gemini (Google AI Studio Free Tier)
         if: env.GEMINI_API_KEY != ''
         run: |
           python src/enrich_llm.py
 
-      - name: Executar Transformações no BigQuery via Dataform (Silver & Gold)
+      - name: Executar Agregações e KPIs no BigQuery via Dataform (Gold & KPI)
         run: |
-          npm install -g @dataform/cli
           cd dataform
-          dataform run --tags silver,gold,kpi || true
+          dataform run --tags gold,kpi

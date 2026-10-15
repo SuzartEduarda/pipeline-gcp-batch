@@ -19,21 +19,39 @@ SELECT
     UPPER(TRIM(canal_origem)) AS canal_origem, 
     TRIM(empresa_alvo) AS empresa_alvo, 
     TRIM(categoria_servico) AS categoria_servico, 
-    TRIM(titulo) AS titulo,
+    -- Anonimizacao de PII (CPF pontuado/continuo, Email e Telefone/DDI) em conformidade com a LGPD
+    REGEXP_REPLACE(
+        REGEXP_REPLACE(
+            REGEXP_REPLACE(
+                TRIM(titulo),
+                r'\b(\d{3}\.\d{3}\.\d{3}-\d{2}|\d{11})\b', '[CPF MASCARADO]'
+            ),
+            r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', '[EMAIL MASCARADO]'
+        ),
+        r'(\+?55\s?)?\(?\d{2}\)?\s?\d{4,5}-?\d{4}', '[TELEFONE MASCARADO]'
+    ) AS titulo,
 
-    -- Anonimissacao de CPF, Email e Telefone
     REGEXP_REPLACE(
         REGEXP_REPLACE(
             REGEXP_REPLACE(
                 descricao_texto,
-                r'\b\d{3}\.\d{3}\.\d{3}-\d{2}\b', '[CPF MASCARADO]'
+                r'\b(\d{3}\.\d{3}\.\d{3}-\d{2}|\d{11})\b', '[CPF MASCARADO]'
             ),
             r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', '[EMAIL MASCARADO]'
         ),
-        r'\(?\d{2}\)?\s?\d{4,5}-\d{4}', '[TELEFONE MASCARADO]'
+        r'(\+?55\s?)?\(?\d{2}\)?\s?\d{4,5}-?\d{4}', '[TELEFONE MASCARADO]'
     ) AS descricao_texto,
 
-    TRIM(replica_empresa_texto) AS replica_empresa_texto,
+    REGEXP_REPLACE(
+        REGEXP_REPLACE(
+            REGEXP_REPLACE(
+                TRIM(replica_empresa_texto),
+                r'\b(\d{3}\.\d{3}\.\d{3}-\d{2}|\d{11})\b', '[CPF MASCARADO]'
+            ),
+            r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', '[EMAIL MASCARADO]'
+        ),
+        r'(\+?55\s?)?\(?\d{2}\)?\s?\d{4,5}-?\d{4}', '[TELEFONE MASCARADO]'
+    ) AS replica_empresa_texto,
     INITCAP(TRIM(cidade)) AS cidade,
     UPPER(TRIM(uf)) AS uf,
 

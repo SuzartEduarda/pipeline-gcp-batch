@@ -8,7 +8,8 @@ token.json
 .gitignore
 .venv/
 venv/
-_pycache_/
+__pycache__/
+**/__pycache__/
 data/
 .terraform/
 .vscode/

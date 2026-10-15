@@ -9,7 +9,8 @@ config {
     },
     assertions: {
         uniqueKey: ["postagem_data_mes", "empresa_alvo", "categoria_servico"]
-    }
+    },
+    tags: ["gold", "kpi"]
 }
 
 SELECT
