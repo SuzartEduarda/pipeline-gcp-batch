@@ -29,8 +29,15 @@ def carregar_bronze_para_silver(is_incremental: bool = True) -> None:
     table_id = "tb_reclame_aqui_raw"
     table_ref = f"{project_id}.{dataset_id}.{table_id}"
     
-    # Instrução para o BQ ler arquivos dentro das subpastas separadas por /
-    gcs_source_uri = f"gs://{bucket_name}/*.parquet"
+    # Suporte a bucket com ou sem prefixo e leitura recursiva de arquivos Parquet (*.parquet)
+    if "/" in bucket_name:
+        b_name, b_prefix = bucket_name.split("/", 1)
+        if b_prefix and not b_prefix.endswith("/"):
+            b_prefix += "/"
+    else:
+        b_name, b_prefix = bucket_name, ""
+
+    gcs_source_uri = f"gs://{b_name}/{b_prefix}*.parquet"
     
     logger.info(f"Origem dos dados no GCS: {gcs_source_uri}")
     logger.info(f"Tabela de destino no BQ: {table_ref}")
@@ -69,7 +76,7 @@ def carregar_bronze_para_silver(is_incremental: bool = True) -> None:
         
         # Execução Sincrona: aguarda o fim do processamento do BQ
         load_job.result()
-        logger.info(f"[CARGA CONCLUIDA COM SUCESSO] Tabelas atualizadas: {table_ref}")
+        logger.info(f"[CARGA CONCLUIDA COM SUCESSO] Linhas carregadas: {load_job.output_rows} | Tabela: {table_ref}")
     
     except GoogleAPIError as gcp_err:
         logger.error(f"[ERRO NA API DO GCP]: {str(gcp_err)}")

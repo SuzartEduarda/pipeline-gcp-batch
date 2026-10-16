@@ -4,8 +4,7 @@ config {
     name: "tb_kpi_llm_performance",
     description: "Camada Gold: Métricas técnicas de qualidade, parsing e acurácia do Gemini",
     dependencies: [
-      "tb_enriquecimento_llm",
-      "gemini_model"
+      "tb_enriquecimento_llm"
     ],
     bigquery: {
         partitionBy: "data_execucao"

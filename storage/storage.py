@@ -2,6 +2,7 @@ import os
 import io
 import re
 import sys
+import shutil
 import logging
 import pandas as pd
 import pyarrow as pa
@@ -71,7 +72,20 @@ def salvar_dados_bronze(data, bucket_setting: str, category_folder: str = "recla
     # Pasta única com a data da execução
     # Estruturação dos caminhos de saída (local/GCP)
     if is_local_only:
-        output_dir = os.path.join("data", EXECUTION_DATE_FOLDER)
+        base_local_dir = "data"
+        if not is_incremental and os.path.exists(base_local_dir):
+            try:
+                logging.info(f"[BACKFILL / TRUNCATE LOCAL] Limpando dados anteriores em: {base_local_dir}")
+                for item in os.listdir(base_local_dir):
+                    item_path = os.path.join(base_local_dir, item)
+                    if os.path.isdir(item_path):
+                        shutil.rmtree(item_path)
+                    elif item.endswith(".parquet"):
+                        os.remove(item_path)
+            except Exception as e:
+                logging.warning(f"Aviso ao limpar diretório local '{base_local_dir}': {str(e)}")
+
+        output_dir = os.path.join(base_local_dir, EXECUTION_DATE_FOLDER)
         logging.info(f"[Salvo Localmente] Destino definido em: {output_dir}")
         try:
             os.makedirs(output_dir, exist_ok=True)
@@ -113,17 +127,18 @@ def salvar_dados_bronze(data, bucket_setting: str, category_folder: str = "recla
             logging.error(f"ERRO ao conectar com GCS - Google Cloud Storage: {str(e)}")
             sys.exit(1)
             
-        # Backfill no GCP / Truncate
+        # Backfill no GCP / Truncate: apaga todo o histórico no bucket (ou sob o prefixo do ambiente)
         if not is_incremental:
             try:
-                logging.info(f"[BACKFILL / TRUNCATE EM NUVEM] Limpeza de dados existentes no Bucket: {gcs_full_prefix}")
-                blobs = bucket.list_blobs(prefix=gcs_full_prefix)
+                prefixo_limpeza = env_base_prefix if env_base_prefix else None
+                logging.info(f"[BACKFILL / TRUNCATE EM NUVEM] Limpeza completa de dados existentes no Bucket '{bucket_name}' (Prefixo: {prefixo_limpeza or 'raiz'})")
+                blobs = bucket.list_blobs(prefix=prefixo_limpeza)
                 count_deleted = 0
                 for blob in blobs:
                     if blob.name.endswith(".parquet"):
                         blob.delete()
                         count_deleted += 1
-                logging.info(f"[Backfill TRUNCATE NUVEM ]: Sucesso: {count_deleted} arquivo(s) antigo(s) apagado(s) do GCS")
+                logging.info(f"[Backfill TRUNCATE NUVEM]: Sucesso: {count_deleted} arquivo(s) antigo(s) apagado(s) do GCS")
             except Exception as e:
                 logging.error(f"ERRO ao conectar ou limpar o GCS - Google Cloud Storage: {str(e)}")
                 sys.exit(1)
