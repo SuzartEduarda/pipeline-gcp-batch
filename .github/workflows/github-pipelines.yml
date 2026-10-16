@@ -125,6 +125,7 @@ jobs:
         run: |
           npm install -g @dataform/cli
           cd dataform
+          echo "{\"projectId\": \"${GCP_PROJECT_ID}\", \"location\": \"us-central1\"}" > .df-credentials.json
           dataform run --tags silver
 
       - name: Executar Enriquecimento Semântico via Gemini (Google AI Studio Free Tier)
