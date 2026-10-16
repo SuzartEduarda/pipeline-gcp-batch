@@ -83,6 +83,7 @@ jobs:
     needs: ci-test-and-lint
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
+    environment: dev
 
     steps:
       - name: Checkout do Repositório
